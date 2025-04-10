@@ -8,7 +8,7 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-void initWindow(GLFWWindow*& window) {
+void initWindow(GLFWwindow*& window) {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -34,12 +34,12 @@ VkInstance createVulkanInstance() {
 	uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-	createInfo.enabledExtensionCount = glfwextensionCount;
+	createInfo.enabledExtensionCount = glfwExtensionCount;
 	createInfo.ppEnabledExtensionNames = glfwExtensions;
 	createInfo.enabledLayerCount = 0;
 
 	if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
-		throw td::runtime_error("Failed to create Vulkan instance!");
+		throw std::runtime_error("Failed to create Vulkan instance!");
 	}
 
 	return instance;
@@ -50,7 +50,7 @@ int main() {
 
 	try {
 		initWindow(window);
-		VKInstance instance = createVulkanInstance();
+		VkInstance instance = createVulkanInstance();
 
 		std::cout << "Vulkan instance created successfully!\n";
 
@@ -63,7 +63,6 @@ int main() {
 		glfwTerminate();
 
 		return EXIT_SUCCESS;
-
 	}
 	catch (const std::exception& e) {
 		std::cerr << e.what() << std::endl;
