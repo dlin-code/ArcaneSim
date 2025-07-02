@@ -21,7 +21,7 @@ include_directories(external/glm)  # Optional for math later
 file(GLOB_RECURSE SRC_FILES src/*.cpp)
 
 # Create executable
-add_executable(ArcaneSim ${SRC_FILES})
+add_executable(ArcaneSim ${SRC_FILES} "src/VulkanApp.cpp" "src/VulkanApp.h")
 
 # Link libraries
 target_link_libraries(ArcaneSim Vulkan::Vulkan glfw)
