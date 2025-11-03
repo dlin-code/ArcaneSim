@@ -943,6 +943,8 @@ void VulkanApplication::mainLoop(GLFWwindow* window) {
 		glfwPollEvents();
 		drawFrame();
 	}
+
+	vkDeviceWaitIdle(device);
 }
 
 void VulkanApplication::drawFrame() {
