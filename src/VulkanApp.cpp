@@ -19,6 +19,23 @@ void VulkanApplication::initWindow(GLFWwindow*& window) {
 	}
 }
 
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	if (func != nullptr) {
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	}
+	else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+}
+
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	}
+}
+
 void VulkanApplication::createInstance() {
 
 	// Line 25-31: VkApplicationInfo
@@ -44,9 +61,61 @@ void VulkanApplication::createInstance() {
 	createInfo.ppEnabledExtensionNames = glfwExtensions;
 	createInfo.enabledLayerCount = 0;
 
-	// Line 47: Creates the Vulkan instance - the root of all Vulkan objects.
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+	debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	debugCreateInfo.messageSeverity =
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+
+	debugCreateInfo.messageType =
+		VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	debugCreateInfo.pfnUserCallback = [](VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagsEXT,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) -> VkBool32 {
+			std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+			return VK_FALSE;
+	};
+	debugCreateInfo.pUserData = nullptr;
+
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+	if (enableValidationLayers) {
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+		createInfo.ppEnabledExtensionNames = extensions.data();
+
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+
+		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+	}
+	else {
+		createInfo.enabledExtensionCount = glfwExtensionCount;
+		createInfo.ppEnabledExtensionNames = glfwExtensions;
+
+		createInfo.enabledLayerCount = 0;
+		createInfo.ppEnabledLayerNames = nullptr;
+
+		createInfo.pNext = nullptr;
+	}
+
+	std::cout << "Enabled Extensions:\n";
+	for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i) {
+		std::cout << "\t" << createInfo.ppEnabledExtensionNames[i] << "\n";
+	}
+
+	// Creates the Vulkan instance - the root of all Vulkan objects.
 	if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create Vulkan instance!");
+	}
+
+	if (enableValidationLayers) {
+		if (CreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+		}
 	}
 }
 
@@ -250,6 +319,7 @@ void VulkanApplication::createLogicalDevice() {
 	}
 	else {
 		createInfo.enabledLayerCount = 0;
+		createInfo.ppEnabledLayerNames = nullptr;
 	}
 
 	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
@@ -393,32 +463,65 @@ void VulkanApplication::createImageViews() {
 	}
 }
 
+// Reads the contents of a spv file, which is a raw binary data, into a std::vector<char>
+// "static" is been used here as it prevents this function pollute the global symbol space.
+//It's apart of "VulkanApp.cpp"'s private logic, not something to expose to other files.
+//If other files also define a readFile(), you won't get linker conflicts.
 static std::vector<char> readFile(const std::string& filename) {
+
 	// Open at end and read the file as binary file (avoid text transformations) to get file size right away
+	// Creates an input file stream to read the file named "filename".
+	// "std::ios::binary": Open the file in binary code, to prevent text mode line-ending conversions (very important for .spv).
+	// "std::ios::ate": Start reading at the end of the file, which allows us to immediately use file.tellg() to get the file size.
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
 		throw std::runtime_error("failed to open file: " + filename);
 	}
-
+	
+	// "file.tellg()" tell us the current position in the file - since we opened it at the end, this equals the file's total size in bytes.
 	size_t fileSize = (size_t)file.tellg();
+
+	if (fileSize == 0) {
+		throw std::runtime_error("Shader file is empty: " + filename);
+	}
+	if (fileSize % 4 != 0) {
+		std::cout << "File size modulo 4: " << (fileSize % 4) << std::endl;
+		throw std::runtime_error("Invalid SPIR_V file size (not divisible by 4): " + filename);
+	}
+
 	std::vector<char> buffer(fileSize);
 
+	// Moves the "get" position back to the start of the file.
 	file.seekg(0);
+
+	// Reads "fileSize" bytes from the file into the buffer.
+	// "buffer.data()" points to buffer[0].
+	// "fileSize" is the maximum iteration count for the buffer, like buffer.size();
 	file.read(buffer.data(), fileSize);
 
+	// Closes the file to release the resource.
 	file.close();
 
+	// Return the entire buffer to the caller - now holding the full contents of the shader .spv file.
 	return buffer;
 }
 
 // This function will take a buffer with the bytecode as parameter and create a VkShaderModule from it.
 VkShaderModule VulkanApplication::createShaderModule(const std::vector<char>& code) {
+	// This creates and zero-initializes a struct that will describe how to create the shader module.
 	VkShaderModuleCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	createInfo.codeSize = code.size();
+	// This tells Vulkan how many bytes are in the shader code.
+	createInfo.codeSize = code.size()/* * sizeof(uint32_t)*/;
+	// Because "std::vector<char>" is a byte array (char*), and Vulkan expects shader code as an array of 32_bit word (uint32_t*).
+	// So "reinterpret_cast" is being used here so Vulkan can treat the byte array as an 32-bit word array.
+	// This works because SPIR-V is defined in 4-byte words, and Vulkan's spec requires that "codeSize" must be a multiple of 4; and "pCode" must point to properly aligned 32-bit data.
+	// The compiler ensures alignment when using "std::vector<char>".
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
+	// Calls the actual Vulkan function to create a shader module..
+	// Fills in "shaderModule" with the GPU-side handle.
 	VkShaderModule shaderModule;
 	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shader module!");
@@ -427,48 +530,491 @@ VkShaderModule VulkanApplication::createShaderModule(const std::vector<char>& co
 	return shaderModule;
 }
 
+void VulkanApplication::createRenderPass() {
+	// Attachment description
+	VkAttachmentDescription colorAttachment{};
+	colorAttachment.format = swapChainImageFormat;												// Format must match thr swapchain image (e.g., VK_FORMAT_R8G8B8A8_SRGB)
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;											// No multisampling (MSAA disabled)
+
+	// The "loadOP" and "storeOP" determine what to do with the data in the attachment before rendering and after rendering
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;										// Clear framebuffer to a color at start of render pass
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;										// Store the rendered contents (we want to keep the result for presentation)
+
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;							// We don't use stencil, so it can be ignored
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;							// Since we don't use stencil, so there's no need to store stencil results
+
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;									// We don't care about previous contents
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;								// Transition to present layout so it can be shown on screen
+
+	// Subpasses and attachment references
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = 0;															// Index of the attachment in the render pass (only one, so 0)
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;						// OPtimal layout for color output during rendering
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;								// This subpass is for the graphics pipeline
+
+	subpass.colorAttachmentCount = 1;															// One color attachment will be used
+	subpass.pColorAttachments = &colorAttachmentRef;											// Pointer to our color attachment reference.
+
+	// Render pass
+	VkRenderPassCreateInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;															// One attachment (color)
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;															// One subpass
+	renderPassInfo.pSubpasses = &subpass;
+
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create render pass!");
+	}
+}
+
 void VulkanApplication::createGraphicsPipeline() {
+	// Loads SPIR-V shader binaries into memory using "readFile" utility.
+	// "vertShaderCode" and "fragShaderCode" contain raw shade bytecode (in std::vector<char>).
 	auto vertShaderCode = readFile("shaders/vert.spv");
 	auto fragShaderCode = readFile("shaders/frag.spv");
 
-	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+	std::cout << "Program read - vertShaderCode size: " << vertShaderCode.size() << std::endl;
+	std::cout << "Program read - fragShaderCode size: " << fragShaderCode.size() << std::endl;
 
+	if (vertShaderCode.size() == 0) {
+		std::cerr << "Vertex shader file is empty!" << std::endl;
+	}
+
+	if (fragShaderCode.size() == 0) {
+		std::cerr << "Fragment shader file is empty!" << std::endl;
+	}
+
+	std::cout << "Creating vertex shader module...\n";
+	vertShaderModule = createShaderModule(vertShaderCode);
+	std::cout << "Vertex shader module created.\n";
+
+	std::cout << "Creating fragment shader module...\n";
+	fragShaderModule = createShaderModule(fragShaderCode);
+	std::cout << "Fragment shader module created.\n";
+
+	// Creates Vulkan shader module using the SPIR-V code by passing the binary into "vkCreateShaderModule" via helper function.
+	/*VkShaderModule */vertShaderModule = createShaderModule(vertShaderCode);
+	/*VkShaderModule */fragShaderModule = createShaderModule(fragShaderCode);
+
+	// Creating shader stage info structs. These structs describes which shaders to use and how.
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;			// Tells Vulkan what kind of struct this is.
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;										// Specifies this is the vertex shader stage.
+	vertShaderStageInfo.module = vertShaderModule;												// The Vulkan shader module you created.
+	vertShaderStageInfo.pName = "main";															// The entry point function name in your shader.
 
 	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
 	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;									// Specifies this is a fragment shader stage.
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
 
+	// Vulkan expects both shader stages to be passed together into the pipeline as an array.
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+	// Tell Vulkan we want to dynamically specify viewport and scissor rectangle at draw time.
+	// These values will NOT be hardcoded into the pipeline; we'll set them later with vkCmdSetViewport/scissor.
+	std::vector<VkDynamicState> dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,																// Viewport (position + size) will be dynamic.
+		VK_DYNAMIC_STATE_SCISSOR																// Scissor (clipping region) will also be dynamic.
+	};
+
+	// This struct describes the dynamic state feature to the pipeline creation.
+	// We pass in our list of states (above), and Vulkan marks them as "externally provided later".
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;					// Must be set to this exact enum.
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());				// How many dynamic states we're using.
+	dynamicState.pDynamicStates = dynamicStates.data();											// Pointer to the first element of our list.
+
+	// Vertex input
+	// This structure describes the format of the vertex data that will be passed to the vertex shader.
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 0;											// Bindings: spacing between data and whether the data is per-vertex or per-instance.
+	vertexInputInfo.pVertexBindingDescriptions = nullptr;
+	vertexInputInfo.vertexAttributeDescriptionCount = 0;										// Attribute descriptions: type of the attributes passed to the vertex shader, which binding to load them from and at which offset.
+	vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+	// Input assembly
+	// This struct tells Vulkan how to interpret your list of vertices.
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;			// Structure type. It's required in Vulkan so the driver knows what's been passing.
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;								// This tells Vulkan how to connect the vertices. "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST" means: Every three vertices form a triangle; and vertices do not share between triangles
+	inputAssembly.primitiveRestartEnable = VK_FALSE;											// Relevant for strip topologies like "TRIANGLE_STRIP" or "LINE_STRIP". If set to "VK_TRUE", you can insert a special index (like '0xFFFF') in an index buffer to restart the strip. But since "TRIANGLE_LIST" is the one been used in this case, so this is set to "VK_FALSE".
+	
+	// Viewports and scissors
+	VkViewport viewport{};																		// "VkViewport" defines the transformation from normalized device coordinates (NDC) -> window coordinates.
+	viewport.x = 0.0f;																			// "x" and "y" represents the top left corner of the viewport in pixels.
+	viewport.y = 0.0f;
+	viewport.width = (float) swapChainExtent.width;												// "width" and "height" are the size of the viewport in pixels. Usually set to swap chain size.
+	viewport.height = (float)swapChainExtent.height;
+	viewport.minDepth = 0.0f;																	// The "minDepth" and "maxDepth" values specify the range of depth values to use for the framebuffer.
+	viewport.maxDepth = 1.0f;
+
+	// The scissor defines what region of the screen to actually allow drawing in. Pixels outside the scissor rectangle will be discarded - no fragment shader will run for them.
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};																	// Top-left corner of the scissor rectangle.
+	scissor.extent = swapChainExtent;															// Width and height of the scissor area.														
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;															// Currently have one viewport.
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;																// Currently have one scissor rectangle.
+	viewportState.pScissors = &scissor;
+
+	// Rasterizer
+	// It takes the geometry that is shaped by the vertices by the vertices from the vertex shader and turns it into fragments to be colored by the fragment shader.
+	// It also performs depth testing, face culling and the scissor test, and it can be configured to output fragments that fill entire polygons or just just the edges (wireframe rendering).
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;														// If it's set to "VK_TRUE", then fragments that are beyond the near and far planes are clamped to them as opposed to discarding them.
+
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;												// If it's set to "VK_TRUE", then geometry never passes through the rasterizer stage, which disables any output to the framebuffer.
+
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;												// It determines how fragments are generated for geometry. In this case "VK_POLYGON_MODE_FILL" fill the area of the polygon with fragments.
+
+	rasterizer.lineWidth = 1.0f;																// It descries the thickness of lines in terms of number of fragments. 
+
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;												// It determines the type of face culling to use, in this case it removes triangles facing away.
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;												// It specifies the vertex order for faces to be considered front-facing and can be clockwise or counterclockwise, in this case it's front face.
+
+	rasterizer.depthBiasEnable = VK_FALSE;														// This affects how fragments are shifted along the Z-axis. Mostly used in shadow mapping to avoid z-fighting.
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	// Multisampling
+	VkPipelineMultisampleStateCreateInfo multisampling{};																								// This struct configures multisampling, which is one of the way to perform anti-alising. It works by combining the fragment shader results of multiple polygons that rasterize to the same pixel.
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;																										// Disables per-fragment sample shading. When "VK_TRUE", fragments are shaded multiple times (more accurate but slower).
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;																							// Specifies how many samples per pixel.
+	multisampling.minSampleShading = 1.0f;																												// If "sampleShadingEnable" were on, this would specify minimum shading rate. Where in this case "1.0f" would fully shade every sample (highest quality).
+	multisampling.pSampleMask = nullptr;																												// Sample masks allow per-sample control of multisampling. In this case "nullptr" means using the default behaviour.
+	multisampling.alphaToCoverageEnable = VK_FALSE;																										// If enabled, uses alpha value to affect coverage (used for transparency and MSAA/Multisample Anti-Aliasing). It should be leave off unless blend transparent objects with MSAA is required later.
+	multisampling.alphaToOneEnable = VK_FALSE;																											// If enabled, force alpha to 1.0 for all MSAA samples (rarely used); also mainly relevant for advanced transparency techniques.
+
+	// Depth and stencil buffer
+	VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	
+	// Color blending
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};																							// This struct contains the configuration (a struct for controlling how blending is applied) per attached framebuffer.
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;	// This sets which components (Red, Green, Blue, Alpha) are written to the framebuffer. Here all four of them has enabled.
+	colorBlendAttachment.blendEnable = VK_FALSE;																										// If set to "VK_FALSE", Vulkan skips blending and write the fragment shader's output color directly to the framebuffer color. If "VK_TRUE", Vulkan will blend the new fragment color with the existing framebuffer color using the setting (srcColorBlendFactor, dstColorBlendFactor, etc).
+	
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;																						// These control RGB blending using standard alpha blending.
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;																					// Final RGB = srcAlpha * newColor + (1 - srcAlpha) * oldColor -> framebuffer gets fully overwritten with new fragment color.
+	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+	
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;																						// This affects how the alpha channel (transparency) is written. This setup keeps the new alpha unchanged (fully replaces it).
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};																								// This struct contains the global color blending settings used acorss all attachments.
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	
+	colorBlending.logicOpEnable = VK_FALSE;																												// In here the logical operations (like XOR or AND) are not been used to combine colors as it's disabled. In here I'm using standard blending instead.
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	
+	colorBlending.attachmentCount = 1;																													// In here we're telling Vulkan that there's one framebuffer attachment, and passing in the config for it. 
+	colorBlending.pAttachments = &colorBlendAttachment;
+	
+	colorBlending.blendConstants[0] = 0.0f;																												// Only used if blend factors are set to VK_BLEND_FACTOR_CONSTANT_COLOR, which is not the case here.
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+	// Pipeline layout
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;																			// Struct type for creating a pipeline layout.
+	pipelineLayoutInfo.setLayoutCount = 0;																												// No descriptor sets used for now. A descriptor set layout defines what kind of GPU resources (like textures, uniform buffers, etc.) the shaders can access and how those resources are bound.
+	pipelineLayoutInfo.pSetLayouts = nullptr;																											// Pointer to descriptor set layouts (unused)
+	pipelineLayoutInfo.pushConstantRangeCount = 0;																										// No push constants used for now. A push constant buffer is a small chunk of data (a few bytes) that you can quickly update and pass to shaders - much faster than updating a buffer.
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;																									// Pointer to push constant ranges (unused)
+
+	// Create the pipeline layout object using the above info
+	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create pipeline layout!");
+	}
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = nullptr;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicState;
+
+	pipelineInfo.layout = pipelineLayout;
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+	std::cout << "stageCount: " << pipelineInfo.stageCount << std::endl;
+	std::cout << "pStages is null? " << (pipelineInfo.pStages == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pVertexInputState is null? " << (pipelineInfo.pVertexInputState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pInputAssemblyState is null? " << (pipelineInfo.pInputAssemblyState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pViewportState is null? " << (pipelineInfo.pViewportState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pRasterizationState is null? " << (pipelineInfo.pRasterizationState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pMultisampleState is null? " << (pipelineInfo.pMultisampleState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pColorBlendState is null? " << (pipelineInfo.pColorBlendState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "pDynamicState is null? " << (pipelineInfo.pDynamicState == nullptr ? "yes" : "no") << std::endl;
+	std::cout << "layout: " << pipelineInfo.layout << std::endl;
+	std::cout << "renderPass: " << pipelineInfo.renderPass << std::endl;
+
+	VkDebugUtilsMessengerCallbackDataEXT* callbackData = nullptr;
+
+	VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline);
+
+	/*if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create graphics pipeline!");
+	}*/
+
+	if (result != VK_SUCCESS) {
+		std::cerr << "vKCreateGraphicsPipelines failed! Error code: " << result << std::endl;
+		throw std::runtime_error("failed to create graphics pipeline!");
+	}
 }
 
-void VulkanApplication::initVulkan(GLFWwindow* window) {
+void VulkanApplication::createFramebuffers() {
+	swapChainFramebuffers.resize(swapChainImageViews.size());																							// Resizing the container to hold all of the framebuffers.
+
+	// Iterate through the image views and create framebuffers from them.
+	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+		
+		// The attachments used by this framebuffer (only a color attachment here).
+		// Each framebuffer points at exactly one swapchain image view.
+		VkImageView attachments[] = {
+			swapChainImageViews[i]
+		};
+
+		// Describe how to create a framebuffer compatible with our render pass.
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;																				// Identify the struct type for Vulkan.
+		framebufferInfo.renderPass = renderPass;																										// Must be compatible with the subpass/attachments we use.
+		framebufferInfo.attachmentCount = 1;																											// Number of attachments used by this framebuffer.
+		framebufferInfo.pAttachments = attachments;																										// Pointer to teh attachments used by this framebuffer.
+		framebufferInfo.width = swapChainExtent.width;																									// Framebuffer width == swapchain image width.
+		framebufferInfo.height = swapChainExtent.height;																								// Framebuffer height == swapchain image height.
+		framebufferInfo.layers = 1;																														// Render to a single layer (no stereoscopic/cubemap).
+
+		// Create the framebuffer object; store its handle in our array.
+		if (vkCreateFramebuffer(device,&framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create framebuffer!");
+		}
+	}
+}
+
+// It manages the memory that is used to store the buffers and command buffers are allocated from them.
+void VulkanApplication::createCommandPool() {
+	QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+	
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create command pool!");
+	}
+}
+
+// Here is where the command buffer allocates.
+void VulkanApplication::createCommandBuffer() {
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = commandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate command buffers!");
+	}
+}
+
+void VulkanApplication::recordCommandBuffer(uint32_t imageIndex) {
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;
+	beginInfo.pInheritanceInfo = nullptr;
+
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+		throw std::runtime_error("failed to begin recording command buffer!");
+	}
+
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = renderPass;
+	renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = swapChainExtent;
+
+	VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+	renderPassInfo.clearValueCount = 1;
+	renderPassInfo.pClearValues = &clearColor;
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(swapChainExtent.width);
+	viewport.height = static_cast<float>(swapChainExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapChainExtent;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+	vkCmdEndRenderPass(commandBuffer);
+
+	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to record command buffer!");
+	}
+}
+
+void VulkanApplication::createSyncObjects() {
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS ||
+		vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create sync objects!");
+	}
+}
+
+void VulkanApplication::initVulkan(GLFWwindow* window, const std::vector<char>& code, uint32_t imageIndex) {
 	createInstance();
 	createSurface(window);
 	pickPhysicalDevice();
 	createLogicalDevice();
 	createSwapChain(window);
 	createImageViews();
+	createRenderPass();
 	createGraphicsPipeline();
+	createFramebuffers();
+	createCommandPool();
+	createCommandBuffer();
+	//recordCommandBuffer(imageIndex);
+	createSyncObjects();
+	//createShaderModule(code);
+}
+
+void VulkanApplication::mainLoop(GLFWwindow* window) {
+	while (!glfwWindowShouldClose(window)) {
+		glfwPollEvents();
+		drawFrame();
+	}
+}
+
+void VulkanApplication::drawFrame() {
+	vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &inFlightFence);
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+	vkResetCommandBuffer(commandBuffer, 0);
+	recordCommandBuffer(imageIndex);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+
+	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
+		throw std::runtime_error("failed to submit draw command buffer!");
+	}
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { swapChain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+
+	presentInfo.pResults = nullptr;
+
+	vkQueuePresentKHR(presentQueue, &presentInfo);
 }
 
 void VulkanApplication::cleanUp(GLFWwindow* window) {
+	vkDeviceWaitIdle(device);																															// W£ait for GPU to finish before destroying anything
+	vkDestroyFence(device, inFlightFence, nullptr);
+	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+	vkDestroyCommandPool(device, commandPool, nullptr);
+	for (auto framebuffer : swapChainFramebuffers) {
+		vkDestroyFramebuffer(device, framebuffer, nullptr);
+	}
+	vkDestroyPipeline(device, graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	for (auto imageView : swapChainImageViews) {
 		vkDestroyImageView(device, imageView, nullptr);
 	}
+	vkDestroyRenderPass(device, renderPass, nullptr);
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 	vkDestroySwapchainKHR(device, swapChain, nullptr);
 	vkDestroyDevice(device, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
+	if (enableValidationLayers) {
+		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+	}
 	glfwDestroyWindow(window);
 	glfwTerminate();
 }

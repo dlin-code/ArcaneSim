@@ -70,6 +70,22 @@ private:
 	VkShaderModule vertShaderModule;
 	VkShaderModule fragShaderModule;
 
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+
+	VkPipeline graphicsPipeline{};
+
+	VkDebugUtilsMessengerEXT debugMessenger;
+
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
+
+	VkSemaphore imageAvailableSemaphore;
+	VkSemaphore renderFinishedSemaphore;
+	VkFence inFlightFence;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -84,8 +100,18 @@ public:
 	void createImageViews();
 	void createGraphicsPipeline();
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+	void createRenderPass();
+	void createFramebuffers();
+	void createCommandPool();
+	void createCommandBuffer();
+	void recordCommandBuffer(uint32_t);
+	void createSyncObjects();
 
-	void initVulkan(GLFWwindow* window);
+	void initVulkan(GLFWwindow* window, const std::vector<char>& code, uint32_t imageIndex);
+
+	void mainLoop(GLFWwindow* window);
+
+	void drawFrame();
 
 	void cleanUp(GLFWwindow* window);
 };
