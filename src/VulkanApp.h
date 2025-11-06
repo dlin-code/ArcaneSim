@@ -80,11 +80,15 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	VkCommandPool commandPool;
-	VkCommandBuffer commandBuffer;
+	std::vector<VkCommandBuffer> commandBuffers;
 
-	VkSemaphore imageAvailableSemaphore;
-	VkSemaphore renderFinishedSemaphore;
-	VkFence inFlightFence;
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+	std::vector<VkFence> inFlightFences;
+
+	const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+	uint32_t currentFrame = 0;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -104,7 +108,7 @@ public:
 	void createFramebuffers();
 	void createCommandPool();
 	void createCommandBuffer();
-	void recordCommandBuffer(uint32_t);
+	void recordCommandBuffer(VkCommandBuffer, uint32_t);
 	void createSyncObjects();
 
 	void initVulkan(GLFWwindow* window, const std::vector<char>& code, uint32_t imageIndex);

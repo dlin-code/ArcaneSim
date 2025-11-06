@@ -40,6 +40,12 @@ include CMakeFiles\rules.ninja
 # Logical path to working directory; prefix for absolute paths.
 
 cmake_ninja_workdir = C$:\Users\David\Documents\ArcaneSim\out\build\x64-Debug\
+
+#############################################
+# Utility command for ShadersTarget
+
+build ShadersTarget: phony CMakeFiles\ShadersTarget shaders\frag.spv shaders\vert.spv
+
 # =============================================================================
 # Object build statements for EXECUTABLE target ArcaneSim
 
@@ -47,7 +53,7 @@ cmake_ninja_workdir = C$:\Users\David\Documents\ArcaneSim\out\build\x64-Debug\
 #############################################
 # Order-only phony target for ArcaneSim
 
-build cmake_object_order_depends_target_ArcaneSim: phony || cmake_object_order_depends_target_glfw
+build cmake_object_order_depends_target_ArcaneSim: phony || ShadersTarget cmake_object_order_depends_target_glfw
 
 build CMakeFiles\ArcaneSim.dir\src\VulkanApp.cpp.obj: CXX_COMPILER__ArcaneSim_unscanned_Debug C$:\Users\David\Documents\ArcaneSim\src\VulkanApp.cpp || cmake_object_order_depends_target_ArcaneSim
   FLAGS = /DWIN32 /D_WINDOWS /W3 /GR /EHsc /MDd /Zi /Ob0 /Od /RTC1 -std:c++17
@@ -81,7 +87,7 @@ build CMakeFiles\ArcaneSim.dir\src\vertex.cpp.obj: CXX_COMPILER__ArcaneSim_unsca
 #############################################
 # Link the executable ArcaneSim.exe
 
-build ArcaneSim.exe: CXX_EXECUTABLE_LINKER__ArcaneSim_Debug CMakeFiles\ArcaneSim.dir\src\VulkanApp.cpp.obj CMakeFiles\ArcaneSim.dir\src\main.cpp.obj CMakeFiles\ArcaneSim.dir\src\vertex.cpp.obj | C$:\VulkanSDK\1.4.309.0\Lib\vulkan-1.lib external\glfw\src\glfw3.lib || external\glfw\src\glfw3.lib
+build ArcaneSim.exe: CXX_EXECUTABLE_LINKER__ArcaneSim_Debug CMakeFiles\ArcaneSim.dir\src\VulkanApp.cpp.obj CMakeFiles\ArcaneSim.dir\src\main.cpp.obj CMakeFiles\ArcaneSim.dir\src\vertex.cpp.obj | C$:\VulkanSDK\1.4.309.0\Lib\vulkan-1.lib external\glfw\src\glfw3.lib || ShadersTarget external\glfw\src\glfw3.lib
   FLAGS = /DWIN32 /D_WINDOWS /W3 /GR /EHsc /MDd /Zi /Ob0 /Od /RTC1
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = C:\VulkanSDK\1.4.309.0\Lib\vulkan-1.lib  external\glfw\src\glfw3.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
@@ -145,6 +151,30 @@ build CMakeFiles\install\local.util: CUSTOM_COMMAND all
   restat = 1
 
 build install\local: phony CMakeFiles\install\local.util
+
+
+#############################################
+# Phony custom command for CMakeFiles\ShadersTarget
+
+build CMakeFiles\ShadersTarget | ${cmake_ninja_workdir}CMakeFiles\ShadersTarget: phony shaders\vert.spv shaders\frag.spv
+
+
+#############################################
+# Custom command for shaders\frag.spv
+
+build shaders\frag.spv | ${cmake_ninja_workdir}shaders\frag.spv: CUSTOM_COMMAND C$:\Users\David\Documents\ArcaneSim\shaders\shader.frag
+  COMMAND = cmd.exe /C "cd /D C:\Users\David\Documents\ArcaneSim\out\build\x64-Debug && C:\VulkanSDK\1.4.309.0\Bin\glslc.exe C:/Users/David/Documents/ArcaneSim/shaders/shader.frag -o C:/Users/David/Documents/ArcaneSim/out/build/x64-Debug/shaders/frag.spv"
+  DESC = Compiling C:/Users/David/Documents/ArcaneSim/shaders/shader.frag -> C:/Users/David/Documents/ArcaneSim/out/build/x64-Debug/shaders/frag.spv
+  restat = 1
+
+
+#############################################
+# Custom command for shaders\vert.spv
+
+build shaders\vert.spv | ${cmake_ninja_workdir}shaders\vert.spv: CUSTOM_COMMAND C$:\Users\David\Documents\ArcaneSim\shaders\shader.vert
+  COMMAND = cmd.exe /C "cd /D C:\Users\David\Documents\ArcaneSim\out\build\x64-Debug && C:\VulkanSDK\1.4.309.0\Bin\glslc.exe C:/Users/David/Documents/ArcaneSim/shaders/shader.vert -o C:/Users/David/Documents/ArcaneSim/out/build/x64-Debug/shaders/vert.spv"
+  DESC = Compiling C:/Users/David/Documents/ArcaneSim/shaders/shader.vert -> C:/Users/David/Documents/ArcaneSim/out/build/x64-Debug/shaders/vert.spv
+  restat = 1
 
 # =============================================================================
 # Write statements declared in CMakeLists.txt:
