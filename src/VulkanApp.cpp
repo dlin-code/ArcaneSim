@@ -3,20 +3,26 @@
 #include <iostream>
 #include <fstream>
 
-void VulkanApplication::initWindow(GLFWwindow*& window) {
+void VulkanApplication::initWindow(/*GLFWwindow*& windowPtr*/) {
 	if (!glfwInit()) {																			// Initialises GLFW.
 		throw std::runtime_error("Failed to initialize GLFW");
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);												// Disables OpenGL context (because we're using Vulkan).
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);													// Makes the window non-resizable (simplifies surface handling for now)
+	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);													// Makes the window non-resizable (simplifies surface handling for now)
 
 	window = glfwCreateWindow(WIDTH, HEIGHT, "ArcaneSim", nullptr, nullptr);					// Returns a pointer to the GLFW window.
-
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
 	if (!window) {
 		throw std::runtime_error("Failed to create GLFW window");
 	}
+}
+
+void VulkanApplication::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+	auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
+	app->framebufferResized = true;
 }
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
@@ -112,15 +118,15 @@ void VulkanApplication::createInstance() {
 		throw std::runtime_error("Failed to create Vulkan instance!");
 	}
 
-	if (enableValidationLayers) {
+	if (enableValidationLayers) { 
 		if (CreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
-			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+			throw std::runtime_error("Failed to create debug messenger!");
 		}
 	}
 }
 
 // It allows Vulkan to present rendered image to the window that's created.
-void VulkanApplication::createSurface(GLFWwindow* window) {
+void VulkanApplication::createSurface(/*GLFWwindow* window*/) {
 	if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create window surface!");
 	}
@@ -351,7 +357,7 @@ VkPresentModeKHR VulkanApplication::chooseSwapPresentMode(const std::vector<VkPr
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D VulkanApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) {
+VkExtent2D VulkanApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities/*, GLFWwindow* window*/) {
 	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
 		return capabilities.currentExtent;
 	}
@@ -371,13 +377,13 @@ VkExtent2D VulkanApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& c
 	}
 }
 
-void VulkanApplication::createSwapChain(GLFWwindow* window) {
+void VulkanApplication::createSwapChain(/*GLFWwindow* window*/) {
 	SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
 
 	VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
 
 	VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
-	VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities, window);
+	VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities/*, window*/);
 
 	swapChainImageFormat = surfaceFormat.format;
 	swapChainExtent = extent;
@@ -865,7 +871,7 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	beginInfo.flags = 0;
 	beginInfo.pInheritanceInfo = nullptr;
 
-	if (vkBeginCommandBuffer(*commandBuffers.data(), &beginInfo) != VK_SUCCESS) {
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
 		throw std::runtime_error("failed to begin recording command buffer!");
 	}
 
@@ -881,9 +887,9 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	renderPassInfo.clearValueCount = 1;
 	renderPassInfo.pClearValues = &clearColor;
 
-	vkCmdBeginRenderPass(*commandBuffers.data(), &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(*commandBuffers.data(), VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
 	VkViewport viewport{};
 	viewport.x = 0.0f;
@@ -892,18 +898,18 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	viewport.height = static_cast<float>(swapChainExtent.height);
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(*commandBuffers.data(), 0, 1, &viewport);
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
 	scissor.extent = swapChainExtent;
-	vkCmdSetScissor(*commandBuffers.data(), 0, 1, &scissor);
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(*commandBuffers.data(), 3, 1, 0, 0);
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
-	vkCmdEndRenderPass(*commandBuffers.data());
+	vkCmdEndRenderPass(commandBuffer);
 
-	if (vkEndCommandBuffer(*commandBuffers.data()) != VK_SUCCESS) {
+	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to record command buffer!");
 	}
 }
@@ -929,12 +935,40 @@ void VulkanApplication::createSyncObjects() {
 	}
 }
 
-void VulkanApplication::initVulkan(GLFWwindow* window, const std::vector<char>& code, uint32_t imageIndex) {
+void VulkanApplication::cleanupSwapChain() {
+	for (auto framebuffer : swapChainFramebuffers) {
+		vkDestroyFramebuffer(device, framebuffer, nullptr);
+	}
+	for (auto imageView : swapChainImageViews) {
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(device, swapChain, nullptr);
+}
+
+void VulkanApplication::recreateSwapChain() {
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(window, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(device);
+
+	cleanupSwapChain();
+
+	createSwapChain();
+	createImageViews();
+	createFramebuffers();
+}
+
+void VulkanApplication::initVulkan(/*GLFWwindow* window, */const std::vector<char>& code, uint32_t imageIndex) {
 	createInstance();
-	createSurface(window);
+	createSurface(/*window*/);
 	pickPhysicalDevice();
 	createLogicalDevice();
-	createSwapChain(window);
+	createSwapChain(/*window*/);
 	createImageViews();
 	createRenderPass();
 	createGraphicsPipeline();
@@ -946,7 +980,7 @@ void VulkanApplication::initVulkan(GLFWwindow* window, const std::vector<char>& 
 	//createShaderModule(code);
 }
 
-void VulkanApplication::mainLoop(GLFWwindow* window) {
+void VulkanApplication::mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		drawFrame();
@@ -957,10 +991,22 @@ void VulkanApplication::mainLoop(GLFWwindow* window) {
 
 void VulkanApplication::drawFrame() {
 	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	//vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		recreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		throw std::runtime_error("failed to acquire swap chain image!");
+	}
+
+	// Only reset the fence if we are submitting work.
+	vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
 	vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 	recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -998,37 +1044,50 @@ void VulkanApplication::drawFrame() {
 
 	presentInfo.pResults = nullptr;
 
-	vkQueuePresentKHR(presentQueue, &presentInfo);
+	result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+		framebufferResized = false;
+		recreateSwapChain();
+	}
+	else if (result != VK_SUCCESS) {
+		throw std::runtime_error("failed to present swap chain image!");
+	}
 
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanApplication::cleanUp(GLFWwindow* window) {
-	vkDeviceWaitIdle(device);																															// W£ait for GPU to finish before destroying anything
+void VulkanApplication::cleanUp() {
+	vkDeviceWaitIdle(device);
+
+	cleanupSwapChain();
+
+	vkDestroyPipeline(device, graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
+	vkDestroyRenderPass(device, renderPass, nullptr);
+
+																															// W£ait for GPU to finish before destroying anything
 	for (size_t i = 0; i < static_cast<size_t>(MAX_FRAMES_IN_FLIGHT); i++) {
 		vkDestroyFence(device, inFlightFences[i], nullptr);
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 	}
+
 	vkDestroyCommandPool(device, commandPool, nullptr);
-	for (auto framebuffer : swapChainFramebuffers) {
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
-	}
-	vkDestroyPipeline(device, graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-	for (auto imageView : swapChainImageViews) {
-		vkDestroyImageView(device, imageView, nullptr);
-	}
-	vkDestroyRenderPass(device, renderPass, nullptr);
+	
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
-	vkDestroySwapchainKHR(device, swapChain, nullptr);
+	
 	vkDestroyDevice(device, nullptr);
-	vkDestroySurfaceKHR(instance, surface, nullptr);
+	
 	if (enableValidationLayers) {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 	}
+
+	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
+
 	glfwDestroyWindow(window);
 	glfwTerminate();
 }

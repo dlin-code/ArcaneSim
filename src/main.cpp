@@ -12,19 +12,19 @@
 
 int main() {
 	
-	GLFWwindow* window;
+	//GLFWwindow* window;
 	/*VkPhysicalDevice physicalDevice;
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
 	VkSwapchainKHR swapChain;*/
 	VulkanApplication vulkanApp;
 	const std::vector<char> code;
-	VkCommandBuffer commandBuffer;
+	//VkCommandBuffer commandBuffer;
 	uint32_t imageIndex = 0;
 
 	try {
-		vulkanApp.initWindow(window);																									// Creates the window.
-		vulkanApp.initVulkan(window/*, physicalDevice, graphicsQueue, presentQueue, swapChain*/, code, imageIndex);
+		vulkanApp.initWindow(/*window*/);																									// Creates the window.
+		vulkanApp.initVulkan(/*window*//*, physicalDevice, graphicsQueue, presentQueue, swapChain, */code, imageIndex);
 
 		std::cout << "Vulkan instance created successfully!\n";  
 
@@ -32,8 +32,8 @@ int main() {
 		//	glfwPollEvents();
 		//	vulkanApp.drawFrame();
 		//}
-		vulkanApp.mainLoop(window);
-		vulkanApp.cleanUp(window/*, swapChain*/);
+		vulkanApp.mainLoop(/*window*/);
+		vulkanApp.cleanUp(/*window*//*, swapChain*/);
 
 		return EXIT_SUCCESS;
 	}

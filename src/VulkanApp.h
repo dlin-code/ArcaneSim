@@ -48,6 +48,8 @@ private:
 
 	std::vector<VkImage> swapChainImages;
 
+	GLFWwindow* window = nullptr;
+
 	VkInstance instance;
 	VkSurfaceKHR surface;
 	VkDevice device;
@@ -65,7 +67,7 @@ private:
 	
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
+	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities/*, GLFWwindow* window*/);
 
 	VkShaderModule vertShaderModule;
 	VkShaderModule fragShaderModule;
@@ -90,17 +92,20 @@ private:
 
 	uint32_t currentFrame = 0;
 
+	bool framebufferResized = false;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 
-	void initWindow(GLFWwindow*& window);
+	void initWindow(/*GLFWwindow*& window*/);
+	static void framebufferResizeCallback(GLFWwindow*, int, int);
 	void createInstance();
-	void createSurface(GLFWwindow* window);
+	void createSurface(/*GLFWwindow* window*/);
 	void pickPhysicalDevice();
 	void createLogicalDevice();
-	void createSwapChain(GLFWwindow* window);
+	void createSwapChain(/*GLFWwindow* window*/);
 	void createImageViews();
 	void createGraphicsPipeline();
 	VkShaderModule createShaderModule(const std::vector<char>& code);
@@ -111,11 +116,14 @@ public:
 	void recordCommandBuffer(VkCommandBuffer, uint32_t);
 	void createSyncObjects();
 
-	void initVulkan(GLFWwindow* window, const std::vector<char>& code, uint32_t imageIndex);
+	void initVulkan(/*GLFWwindow* window, */const std::vector<char>& code, uint32_t imageIndex);
 
-	void mainLoop(GLFWwindow* window);
+	void mainLoop(/*GLFWwindow* window*/);
 
 	void drawFrame();
 
-	void cleanUp(GLFWwindow* window);
+	void cleanupSwapChain();
+	void recreateSwapChain();
+
+	void cleanUp(/*GLFWwindow* window*/);
 };
