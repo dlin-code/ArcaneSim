@@ -18,13 +18,11 @@ int main() {
 	VkQueue presentQueue;
 	VkSwapchainKHR swapChain;*/
 	VulkanApplication vulkanApp;
-	const std::vector<char> code;
 	//VkCommandBuffer commandBuffer;
-	uint32_t imageIndex = 0;
 
 	try {
-		vulkanApp.initWindow(/*window*/);																									// Creates the window.
-		vulkanApp.initVulkan(/*window*//*, physicalDevice, graphicsQueue, presentQueue, swapChain, */code, imageIndex);
+		vulkanApp.initWindow();																									// Creates the window.
+		vulkanApp.initVulkan();
 
 		std::cout << "Vulkan instance created successfully!\n";  
 
@@ -32,8 +30,8 @@ int main() {
 		//	glfwPollEvents();
 		//	vulkanApp.drawFrame();
 		//}
-		vulkanApp.mainLoop(/*window*/);
-		vulkanApp.cleanUp(/*window*//*, swapChain*/);
+		vulkanApp.mainLoop();
+		vulkanApp.cleanUp();
 
 		return EXIT_SUCCESS;
 	}

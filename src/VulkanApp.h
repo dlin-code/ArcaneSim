@@ -11,6 +11,10 @@
 #include <set>
 #include <algorithm>	// Necessary for std::clamp
 
+#include <cstdint>		// for uint16_t
+
+#include "vertex.h"
+
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
@@ -47,6 +51,17 @@ private:
 	};
 
 	std::vector<VkImage> swapChainImages;
+
+	const std::vector<Vertex> vertices = {
+		{{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+		{{0.5f, -0.5f, 0.0f}, {0.0f, 0.25f, 0.75f}},
+		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.5f, 1.0f}},
+		{{-0.5f, 0.5f, 0.0f}, {0.5f, 0.5f, 0.5f}},
+	};
+
+	const std::vector<uint16_t> indices = {
+		0, 1, 2 , 2, 3, 0
+	};
 
 	GLFWwindow* window = nullptr;
 
@@ -94,6 +109,11 @@ private:
 
 	bool framebufferResized = false;
 
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -115,8 +135,16 @@ public:
 	void createCommandBuffer();
 	void recordCommandBuffer(VkCommandBuffer, uint32_t);
 	void createSyncObjects();
+	void createVertexBuffer();
+	uint32_t findMemoryType(uint32_t, VkMemoryPropertyFlags);
 
-	void initVulkan(/*GLFWwindow* window, */const std::vector<char>& code, uint32_t imageIndex);
+	void createBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
+
+	void copyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
+
+	void createIndexBuffer();
+
+	void initVulkan();
 
 	void mainLoop(/*GLFWwindow* window*/);
 
