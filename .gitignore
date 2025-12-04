@@ -5,6 +5,8 @@
 *.user
 *.VC.db
 *.VC.opendb
+*.ipch
+*.sqlite
 
 # CMake
 CMakeFiles/
