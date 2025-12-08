@@ -8,6 +8,12 @@
 *.ipch
 *.sqlite
 
+# Visual Studio build Output
+Debug/
+Release/
+x64/
+out/
+
 # CMake
 CMakeFiles/
 CMakeCache.txt
