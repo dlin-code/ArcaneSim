@@ -1,25 +1,27 @@
 # Visual Studio
 .vs/
-*.vcxproj*
-*.sln
 *.user
 *.VC.db
 *.VC.opendb
 *.ipch
 *.sqlite
 
+# Keep sln. and .vcxproj tracked
+# *.sln
+# *.vcxproj*
+
 # Visual Studio build Output
 Debug/
 Release/
 x64/
 out/
+out/build/
 
 # CMake
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
-/build/
 
 # Binaries
 *.exe
