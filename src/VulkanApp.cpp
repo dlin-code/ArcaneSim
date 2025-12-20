@@ -3,6 +3,12 @@
 #include <iostream>
 #include <fstream>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+
 void VulkanApplication::initWindow(/*GLFWwindow*& windowPtr*/) {
 	if (!glfwInit()) {																			// Initialises GLFW.
 		throw std::runtime_error("Failed to initialize GLFW");
@@ -703,7 +709,7 @@ void VulkanApplication::createGraphicsPipeline() {
 	rasterizer.lineWidth = 1.0f;																// It descries the thickness of lines in terms of number of fragments. 
 
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;												// It determines the type of face culling to use, in this case it removes triangles facing away.
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;												// It specifies the vertex order for faces to be considered front-facing and can be clockwise or counterclockwise, in this case it's front face.
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;												// It specifies the vertex order for faces to be considered front-facing and can be clockwise or counterclockwise, in this case it's front face.
 
 	rasterizer.depthBiasEnable = VK_FALSE;														// This affects how fragments are shifted along the Z-axis. Mostly used in shadow mapping to avoid z-fighting.
 	rasterizer.depthBiasConstantFactor = 0.0f;
@@ -754,8 +760,8 @@ void VulkanApplication::createGraphicsPipeline() {
 	// Pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;																			// Struct type for creating a pipeline layout.
-	pipelineLayoutInfo.setLayoutCount = 0;																												// No descriptor sets used for now. A descriptor set layout defines what kind of GPU resources (like textures, uniform buffers, etc.) the shaders can access and how those resources are bound.
-	pipelineLayoutInfo.pSetLayouts = nullptr;																											// Pointer to descriptor set layouts (unused)
+	pipelineLayoutInfo.setLayoutCount = 1;																												// No descriptor sets used for now. A descriptor set layout defines what kind of GPU resources (like textures, uniform buffers, etc.) the shaders can access and how those resources are bound.
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;																											// Pointer to descriptor set layouts (unused)
 	pipelineLayoutInfo.pushConstantRangeCount = 0;																										// No push constants used for now. A push constant buffer is a small chunk of data (a few bytes) that you can quickly update and pass to shaders - much faster than updating a buffer.
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;																									// Pointer to push constant ranges (unused)
 
@@ -898,7 +904,7 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	VkBuffer vertexBuffers[] = {vertexBuffer};
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
 	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 	VkViewport viewport{};
@@ -1118,6 +1124,38 @@ void VulkanApplication::createIndexBuffer() {
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
+void VulkanApplication::createDescriptorSetLayout() {
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create descriptor set layout!");
+	}
+}
+
+void VulkanApplication::createUniformBuffers() {
+	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+		
+		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+	}
+}
+
 void VulkanApplication::initVulkan() {
 	createInstance();
 	createSurface();
@@ -1126,6 +1164,7 @@ void VulkanApplication::initVulkan() {
 	createSwapChain();
 	createImageViews();
 	createRenderPass();
+	createDescriptorSetLayout();
 	createGraphicsPipeline();
 	createFramebuffers();
 
@@ -1133,6 +1172,9 @@ void VulkanApplication::initVulkan() {
 
 	createVertexBuffer();
 	createIndexBuffer();
+	createUniformBuffers();
+	createDescriptorPool();
+	createDescriptorSets();
 	createCommandBuffer();
 	createSyncObjects();
 }
@@ -1161,6 +1203,8 @@ void VulkanApplication::drawFrame() {
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 		throw std::runtime_error("failed to acquire swap chain image!");
 	}
+
+	updateUniformBuffer(currentFrame);
 
 	// Only reset the fence if we are submitting work.
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -1214,10 +1258,87 @@ void VulkanApplication::drawFrame() {
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
+	static auto startTime = std::chrono::high_resolution_clock::now();
+
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	UniformBufferObject ubo{};
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+	
+	ubo.proj[1][1] *= -1;
+
+	memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
+void VulkanApplication::createDescriptorPool() {
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create descriptor pool!");
+	}
+}
+
+void VulkanApplication::createDescriptorSets() {
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.pSetLayouts = layouts.data();
+
+	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate descriptor sets!");
+	}
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = uniformBuffers[i];
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(UniformBufferObject);
+	
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = descriptorSets[i];
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstArrayElement = 0;
+
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+
+		descriptorWrite.pBufferInfo = &bufferInfo;
+		descriptorWrite.pImageInfo = nullptr;
+		descriptorWrite.pTexelBufferView = nullptr;
+
+		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+	}
+}
+
+
 void VulkanApplication::cleanUp() {
 	vkDeviceWaitIdle(device);
 
 	cleanupSwapChain();
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
+		vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
+	}
+
+	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);

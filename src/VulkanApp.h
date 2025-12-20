@@ -37,6 +37,12 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 class VulkanApplication
 {
 private:
@@ -88,6 +94,7 @@ private:
 	VkShaderModule fragShaderModule;
 
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 
 	VkPipeline graphicsPipeline{};
@@ -113,6 +120,13 @@ private:
 	VkDeviceMemory vertexBufferMemory;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -143,6 +157,13 @@ public:
 	void copyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
 
 	void createIndexBuffer();
+	void createUniformBuffers();
+
+	void createDescriptorSetLayout();
+	void createDescriptorPool();
+	void createDescriptorSets();
+
+	void updateUniformBuffer(uint32_t);
 
 	void initVulkan();
 
