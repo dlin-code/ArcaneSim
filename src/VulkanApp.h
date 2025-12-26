@@ -175,6 +175,16 @@ public:
 
 	void updateUniformBuffer(uint32_t);
 
+	void createDepthResources();
+
+	VkFormat findSupportedFormat(const std::vector<VkFormat>&, VkImageTiling, VkFormatFeatureFlags);
+	VkFormat findDepthFormat();
+
+	bool hasStencilComponent(VkFormat);
+
+	void createImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	VkImageView createImageView(VkImage, VkFormat, VkImageAspectFlags);
+
 	void initVulkan();
 
 	void mainLoop(/*GLFWwindow* window*/);
