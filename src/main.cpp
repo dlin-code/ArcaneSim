@@ -13,7 +13,8 @@
 int main() {
 	
 	//GLFWwindow* window;
-	/*VkPhysicalDevice physicalDevice;
+	/*
+	physicalDevice;
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
 	VkSwapchainKHR swapChain;*/

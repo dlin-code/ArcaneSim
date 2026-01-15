@@ -5,11 +5,9 @@
 
 struct Vertex
 {
-	//glm::vec3 positions;
 	glm::vec3 pos;
 	glm::vec3 color;
-	//glm::vec3 normal;
-	//glm::vec2 uv;
+	glm::vec2 texCoord;
 
 	// Binding descriptions. Tells Vulkan how to pass vertex vector format to the vertex shader once it's been uploaded into GPU memory.
 	static VkVertexInputBindingDescription getBindingDescription() {
@@ -22,8 +20,8 @@ struct Vertex
 	}
 
 	// Attribute descriptions
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
 		// Position
 		attributeDescriptions[0].binding = 0;													// It tells Vulkan from which binding the per-vertex data comes.
@@ -36,6 +34,12 @@ struct Vertex
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 		attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+		// Texture coordinate
+		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].location = 2;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
 
 		return attributeDescriptions;
 	}
