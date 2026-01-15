@@ -49,8 +49,8 @@ private:
 	const uint32_t WIDTH = 800;																		// The current window size.
 	const uint32_t HEIGHT = 600;
 
-	//const std::string MODEL_PATH = "../models/viking_room.obj";
-	//const std::string TEXTURE_PATH = "../textures/viking_room.png";
+	const std::string MODEL_PATH = "../../../models/viking_room.obj";
+	const std::string TEXTURE_PATH = "../../../textures/viking_room.png";
 
 	const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -61,7 +61,7 @@ private:
 
 	std::vector<VkImage> swapChainImages;
 
-	const std::vector<Vertex> vertices = {
+	/*const std::vector<Vertex> vertices = {
 		{{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
 		{{0.5f, -0.5f, 0.0f}, {0.0f, 0.25f, 0.75f}, {0.0f, 0.0f}},
 		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.5f, 1.0f}, {0.0f, 1.0f}},
@@ -71,16 +71,16 @@ private:
 		{{0.5f, -0.5f, -0.5f}, {0.0f, 0.25f, 0.75f}, {0.0f, 0.0f}},
 		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.5f, 1.0f}, {0.0f, 1.0f}},
 		{{-0.5f, 0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}},
-	};
+	};*/
 
-	//std::vector<Vertex> vertices;
+	std::vector<Vertex> vertices;
 
-	const std::vector<uint16_t> indices = {
+	/*const std::vector<uint16_t> indices = {
 		0, 1, 2 , 2, 3, 0,
 		4, 5, 6 , 6, 7, 4
-	};
+	};*/
 
-	//std::vector<uint32_t> indices;
+	std::vector<uint32_t> indices;
 
 	GLFWwindow* window = nullptr;
 
