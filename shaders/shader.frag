@@ -1,4 +1,13 @@
 #version 450
+
+layout(binding = 0) uniform uniformBufferObject {
+	mat4 model;
+	mat4 view;
+	mat4 proj;
+	vec3 lightPos;
+	vec3 viewPos;
+} ubo;
+
 layout(binding = 1) uniform sampler2D texSampler;
 
 layout(location = 0) in vec3 fragColor;
@@ -9,14 +18,14 @@ layout(location = 3) in vec3 fragPos;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-	vec3 lightPos = vec3(2.0, 2.0, 2.0);
-	vec3 viewPos = vec3(0.0, 0.0, 3.0);
-	vec3 lightColor = vec3(1.0, 1.0, 1.0);
+	vec3 lightPos = ubo.lightPos;
+	vec3 viewPos = ubo.viewPos;
+	vec3 lightColor = vec3(1.3, 1.3, 1.3);
 
 	vec3 objectColor = texture(texSampler, fragTexCoord).rgb;
 
 	// Ambient
-	float ambientStrength = 0.3;
+	float ambientStrength = 0.35;
 	vec3 ambient = ambientStrength * lightColor;
 
 	// Diffuse
@@ -26,7 +35,7 @@ void main() {
 	vec3 diffuse = diff * lightColor;
 
 	// Specular
-	float specularStrength = 0.5;
+	float specularStrength = 0.6;
 	vec3 viewDir = normalize(viewPos - fragPos);
 	vec3 reflectDir = reflect(-lightDir, norm);
 	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);

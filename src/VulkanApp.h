@@ -38,9 +38,11 @@ struct SwapChainSupportDetails {
 };
 
 struct UniformBufferObject {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
+	alignas(16) glm::mat4 model;
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+	alignas(16) glm::vec3 lightPos;
+	alignas(16) glm::vec3 viewPos;
 };
 
 class VulkanApplication

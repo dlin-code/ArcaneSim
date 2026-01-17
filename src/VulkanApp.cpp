@@ -1618,6 +1618,17 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 	
 	ubo.proj[1][1] *= -1;
 
+	ubo.lightPos = glm::vec3(3.0f, 3.0f, 3.0f);
+
+	ubo.viewPos = glm::vec3(2.0f, 2.0f, 2.0f);
+
+	static bool printed = false;
+	if (!printed) {
+		std::cout << "Light Pos: (" << ubo.lightPos.x << ", " << ubo.lightPos.y << ", " << ubo.lightPos.z << ")" << std::endl;
+		std::cout << "View Pos: (" << ubo.viewPos.x << ", " << ubo.viewPos.y << ", " << ubo.viewPos.z << ")" << std::endl;
+		printed = true;
+	}
+
 	memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
 }
 
