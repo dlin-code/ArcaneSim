@@ -16,6 +16,8 @@
 
 #include <chrono>
 
+
+
 void VulkanApplication::initWindow(/*GLFWwindow*& windowPtr*/) {
 	if (!glfwInit()) {																			// Initialises GLFW.
 		throw std::runtime_error("Failed to initialize GLFW");
@@ -1192,7 +1194,7 @@ void VulkanApplication::createDescriptorSetLayout() {
 	uboLayoutBinding.binding = 0;
 	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	uboLayoutBinding.pImmutableSamplers = nullptr;
 
 	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
@@ -1351,12 +1353,12 @@ void VulkanApplication::createTextureImage() {
 
 void VulkanApplication::createSkyboxImage() {
 	std::vector<std::string> faces = {
-		"../../../textures/skybox/right.jpg",
-		"../../../textures/skybox/left.jpg",
-		"../../../textures/skybox/top.jpg",
-		"../../../textures/skybox/bottom.jpg",
-		"../../../textures/skybox/front.jpg",
-		"../../../textures/skybox/back.jpg"
+		"textures/skybox/right.jpg",
+		"textures/skybox/left.jpg",
+		"textures/skybox/top.jpg",
+		"textures/skybox/down.jpg",
+		"textures/skybox/front.jpg",
+		"textures/skybox/back.jpg"
 	};
 
 	int texWidth, texHeight, texChannels;
@@ -1542,7 +1544,7 @@ void VulkanApplication::createSkyboxImageView() {
 	skyboxImageView = createImageView(skyboxImage, VK_IMAGE_VIEW_TYPE_CUBE, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 6);
 }
 
-void VulkanApplication::createSkyboxSampler() {
+void VulkanApplication::cerateSkyboxSampler() {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -1906,7 +1908,7 @@ void VulkanApplication::initVulkan() {
 	createTextureSampler();
 	createSkyboxImage();
 	createSkyboxImageView();
-	createSkyboxSampler();
+	cerateSkyboxSampler();
 	loadModel();
 	createVertexBuffer();
 	createIndexBuffer();
@@ -2028,15 +2030,15 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 void VulkanApplication::createDescriptorPool() {
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");

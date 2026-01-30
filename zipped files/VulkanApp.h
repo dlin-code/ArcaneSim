@@ -294,7 +294,7 @@ public:
 	void createSkyboxVertexBuffer();
 	void createSkyboxImage();
 	void createSkyboxImageView();
-	void createSkyboxSampler();
+	void cerateSkyboxSampler();
 	void createSkyboxDescriptorSetLayout();
 	void createSkyboxDescriptorSets();
 	void createSkyboxPipeline();
