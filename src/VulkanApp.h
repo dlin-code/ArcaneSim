@@ -3,7 +3,7 @@
 
 #define GLFW_INCLUDE_VULKAN																		// GLFW_INCLUDE_VULKAN tells GLFW to include Vulkan headers for you.
 #include <GLFW/glfw3.h>																			// Line 5-6 makes glfwCreateWindow Vulkan_aware.
-
+#include <string>
 #include <vector>
 #include <map>
 #include <optional>
@@ -14,6 +14,7 @@
 #include <cstdint>		// for uint16_t
 
 #include "vertex.h"
+#include "camera.h"
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -224,6 +225,7 @@ public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
+	Camera mainCamera;
 
 	void initWindow(/*GLFWwindow*& window*/);
 	static void framebufferResizeCallback(GLFWwindow*, int, int);

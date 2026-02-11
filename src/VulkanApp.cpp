@@ -16,17 +16,30 @@
 
 #include <chrono>
 
+VulkanApplication* g_app = nullptr;
+
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+	if (g_app) {
+		g_app->mainCamera.processMouse(xpos, ypos);
+	}
+}
+
 void VulkanApplication::initWindow(/*GLFWwindow*& windowPtr*/) {
 	if (!glfwInit()) {																			// Initialises GLFW.
 		throw std::runtime_error("Failed to initialize GLFW");
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);												// Disables OpenGL context (because we're using Vulkan).
-	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);													// Makes the window non-resizable (simplifies surface handling for now)
+	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);												// Makes the window non-resizable (simplifies surface handling for now)
 
 	window = glfwCreateWindow(WIDTH, HEIGHT, "ArcaneSim", nullptr, nullptr);					// Returns a pointer to the GLFW window.
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+
+	g_app = this;
+	glfwSetCursorPosCallback(window, cursor_position_callback);
+
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 	if (!window) {
 		throw std::runtime_error("Failed to create GLFW window");
@@ -1917,11 +1930,20 @@ void VulkanApplication::initVulkan() {
 	createSkyboxDescriptorSets();
 	createCommandBuffer();
 	createSyncObjects();
+
+	// Initialize the camera position and rotation angles
+	mainCamera.position = glm::vec3(0.f, 0.f, 5.f);
+	mainCamera.pitch = 0.f;
+	mainCamera.yaw = 0.f;
 }
 
 void VulkanApplication::mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+
+		mainCamera.processInput(window);
+		mainCamera.update();
+
 		drawFrame();
 	}
 
@@ -2006,14 +2028,14 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 
 	UniformBufferObject ubo{};
 	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
+	ubo.view = /*glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));*/ mainCamera.getViewMatrix();
+	ubo.proj = glm::perspective(glm::radians(/*45.0f*/70.f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, /*10.0f*/10000.f);
 	
 	ubo.proj[1][1] *= -1;
 
 	ubo.lightPos = glm::vec3(3.0f, 3.0f, 3.0f);
 
-	ubo.viewPos = glm::vec3(2.0f, 2.0f, 2.0f);
+	ubo.viewPos = /*glm::vec3(2.0f, 2.0f, 2.0f)*/mainCamera.position;
 
 	static bool printed = false;
 	if (!printed) {
