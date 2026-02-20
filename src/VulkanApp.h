@@ -221,6 +221,10 @@ private:
 	VkPipeline skyboxPipeline;
 	std::vector<VkDescriptorSet> skyboxDescriptorSets;
 
+	VkImage normalMapImage = VK_NULL_HANDLE;
+	VkDeviceMemory normalMapImageMemory = VK_NULL_HANDLE;
+	VkImageView normalMapImageView = VK_NULL_HANDLE;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -235,6 +239,7 @@ public:
 	void createLogicalDevice();
 	void createSwapChain(/*GLFWwindow* window*/);
 	void createImageViews();
+
 	void createGraphicsPipeline();
 	VkShaderModule createShaderModule(const std::vector<char>& code);
 	void createRenderPass();
@@ -270,6 +275,7 @@ public:
 	VkImageView createImageView(VkImage, VkImageViewType, VkFormat, VkImageAspectFlags, uint32_t);
 
 	void createTextureImage();
+	void createNormalMapImage();
 
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer);
@@ -279,6 +285,7 @@ public:
 	void copyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t, uint32_t);
 
 	void createTextureImageView();
+	void createNormalMapImageView();
 
 	void createTextureSampler();
 

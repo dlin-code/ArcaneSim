@@ -10,27 +10,27 @@ void Camera::processInput(GLFWwindow* window) {
 	velocity = glm::vec3(0.0f);
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		velocity.z = -1;
+		velocity.z = -0.5;
 	}
 	
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		velocity.z = 1;
+		velocity.z = 0.5;
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		velocity.x = -1;
+		velocity.x = -0.5;
 	}
 	
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		velocity.x = 1;
+		velocity.x = 0.5;
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-		velocity.y = 1;
+		velocity.y = 0.5;
 	}
 	
 	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-		velocity.y = -1;
+		velocity.y = -0.5;
 	}
 }
 

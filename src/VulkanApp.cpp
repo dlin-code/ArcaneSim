@@ -1215,7 +1215,14 @@ void VulkanApplication::createDescriptorSetLayout() {
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+	VkDescriptorSetLayoutBinding normalMapLayoutBinding{};
+	normalMapLayoutBinding.binding = 2;
+	normalMapLayoutBinding.descriptorCount = 1;
+	normalMapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	normalMapLayoutBinding.pImmutableSamplers = nullptr;
+	normalMapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, normalMapLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1332,7 +1339,7 @@ VkImageView VulkanApplication::createImageView(VkImage image, VkImageViewType vi
 void VulkanApplication::createTextureImage() {
 	int texWidth, texHeight, texChannels;
 	//std::cout << "Loading texture:: " << TEXTURE_PATH << std::endl;
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str()/*"../../../textures/texture.jpg"*/, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {
@@ -1357,6 +1364,38 @@ void VulkanApplication::createTextureImage() {
 	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
 	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1);
 	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+void VulkanApplication::createNormalMapImage() {
+	int texWidth, texHeight, texChannels;
+	stbi_uc* pixels = stbi_load("../../../textures/viking_room_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+	if (!pixels) {
+		std::cerr << "stbi_load failed!" << std::endl;
+		std::cerr << "Reason: " << stbi_failure_reason() << std::endl;
+		throw std::runtime_error("failed to load normal map image!");
+	}
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, pixels, static_cast<size_t>(imageSize));
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	stbi_image_free(pixels);
+
+	createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, normalMapImage, normalMapImageMemory);
+
+	transitionImageLayout(normalMapImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+	copyBufferToImage(stagingBuffer, normalMapImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1);
+	transitionImageLayout(normalMapImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
 
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1521,6 +1560,10 @@ void VulkanApplication::createTextureImageView() {
 	textureImageView = createImageView(textureImage, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
+void VulkanApplication::createNormalMapImageView() {
+	normalMapImageView = createImageView(normalMapImage, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+}
+
 void VulkanApplication::createTextureSampler() {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1599,49 +1642,179 @@ void VulkanApplication::loadModel() {
 		throw std::runtime_error(err);
 	}
 
-	for (const auto& shape : shapes) {
-		for (const auto& index : shape.mesh.indices) {
-			Vertex vertex{};
+	glm::vec3 edge1;
+	glm::vec3 edge2;
+	glm::vec2 deltaUV1;
+	glm::vec2 deltaUV2;
+	float f;
 
-			vertex.pos = {
-				attrib.vertices[3 * index.vertex_index + 0],
-				attrib.vertices[3 * index.vertex_index + 1],
-				attrib.vertices[3 * index.vertex_index + 2]
+	for (const auto& shape : shapes) {
+		for (auto i = 0; i < shape.mesh.indices.size(); i += 3) {
+			std::vector<tinyobj::index_t> idx(3);
+
+			idx[0] = shape.mesh.indices[i];
+			idx[1] = shape.mesh.indices[i + 1];
+			idx[2] = shape.mesh.indices[i + 2];
+
+			Vertex v0, v1, v2;
+
+			v0.pos = {
+				attrib.vertices[3 * idx[0].vertex_index + 0],
+				attrib.vertices[3 * idx[0].vertex_index + 1],
+				attrib.vertices[3 * idx[0].vertex_index + 2]
 			};
 
-			if (index.texcoord_index >= 0) {
-				vertex.texCoord = {
-					attrib.texcoords[2 * index.texcoord_index + 0],
-					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+			if (idx[0].texcoord_index >= 0) {
+				v0.texCoord = {
+					attrib.texcoords[2 * idx[0].texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * idx[0].texcoord_index + 1]
 				};
 			}
 			else {
-				vertex.texCoord = { 0.0f, 0.0f };
+				v0.texCoord = {0.0f, 0.0f};
 				std::cout << "Warning: No texcoord for vertex!" << std::endl;
 			}
 
-			vertex.color = { 1.0f, 1.0f, 1.0f };
+			v0.color = {1.0f, 1.0f, 1.0f};
 
-			if (index.normal_index >= 0) {
-				vertex.normal = {
-					attrib.normals[3 * index.normal_index + 0],
-					attrib.normals[3 * index.normal_index + 1],
-					attrib.normals[3 * index.normal_index + 2]
+			if (idx[0].normal_index >= 0) {
+				v0.normal = {
+					attrib.normals[3 * idx[0].normal_index + 0],
+					attrib.normals[3 * idx[0].normal_index + 1],
+					attrib.normals[3 * idx[0].normal_index + 2]
 				};
 			}
 			else {
-				vertex.normal = { 0.0f, 0.0f, 1.0f };
+				v0.normal = {0.0f, 0.0f, 1.0f};
 			}
 
-			/*vertices.push_back(vertex);
-			indices.push_back(indices.size());*/
 
-			if (uniqueVertices.count(vertex) == 0) {
-				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-				vertices.push_back(vertex);
+			v1.pos = {
+				attrib.vertices[3 * idx[1].vertex_index + 0],
+				attrib.vertices[3 * idx[1].vertex_index + 1],
+				attrib.vertices[3 * idx[1].vertex_index + 2]
+			};
+
+			if (idx[1].texcoord_index >= 0) {
+				v1.texCoord = {
+					attrib.texcoords[2 * idx[1].texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * idx[1].texcoord_index + 1]
+				};
+			}
+			else {
+				v1.texCoord = { 0.0f, 0.0f };
+				std::cout << "Warning: No texcoord for vertex!" << std::endl;
 			}
 
-			indices.push_back(uniqueVertices[vertex]);
+			v1.color = { 1.0f, 1.0f, 1.0f };
+
+			if (idx[1].normal_index >= 0) {
+				v1.normal = {
+					attrib.normals[3 * idx[1].normal_index + 0],
+					attrib.normals[3 * idx[1].normal_index + 1],
+					attrib.normals[3 * idx[1].normal_index + 2]
+				};
+			}
+			else {
+				v1.normal = { 0.0f, 0.0f, 1.0f };
+			}
+
+
+			v2.pos = {
+				attrib.vertices[3 * idx[2].vertex_index + 0],
+				attrib.vertices[3 * idx[2].vertex_index + 1],
+				attrib.vertices[3 * idx[2].vertex_index + 2]
+			};
+
+			if (idx[2].texcoord_index >= 0) {
+				v2.texCoord = {
+					attrib.texcoords[2 * idx[2].texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * idx[2].texcoord_index + 1]
+				};
+			}
+			else {
+				v2.texCoord = { 0.0f, 0.0f };
+				std::cout << "Warning: No texcoord for vertex!" << std::endl;
+			}
+
+			v2.color = { 1.0f, 1.0f, 1.0f };
+
+			if (idx[2].normal_index >= 0) {
+				v2.normal = {
+					attrib.normals[3 * idx[2].normal_index + 0],
+					attrib.normals[3 * idx[2].normal_index + 1],
+					attrib.normals[3 * idx[2].normal_index + 2]
+				};
+			}
+			else {
+				v2.normal = { 0.0f, 0.0f, 1.0f };
+			}
+
+			// Calculating the edge
+			edge1 = v1.pos - v0.pos;
+			edge2 = v2.pos - v0.pos;
+
+			// Calculating UV differences
+			deltaUV1 = v1.texCoord - v0.texCoord;
+			deltaUV2 = v2.texCoord - v0.texCoord;
+
+			f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+
+			// Calculating the tangent
+			glm::vec3 tangent;
+			tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+			tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+			tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+			// Calculating the bitangent
+			glm::vec3 bitangent;
+			bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+			bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+			bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+
+			v0.tangent = tangent;
+			v0.bitangent = glm::vec3(0.0f);
+			v1.tangent = tangent;
+			v1.bitangent = glm::vec3(0.0f);
+			v2.tangent = tangent;
+			v2.bitangent = glm::vec3(0.0f);
+
+			if (uniqueVertices.count(v0) == 0) {
+				uniqueVertices[v0] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(v0);
+			}
+
+			if (uniqueVertices.count(v1) == 0) {
+				uniqueVertices[v1] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(v1);
+			}
+
+			if (uniqueVertices.count(v2) == 0) {
+				uniqueVertices[v2] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(v2);
+			}
+
+			/*if (uniqueVertices.count(vertices[0]) == 0) {
+				uint32_t idx0 = static_cast<uint32_t>(this->vertices.size());
+				uniqueVertices[vertices[0]] = idx0;
+				this->vertices.push_back(vertices[0]);
+			}
+
+			if (uniqueVertices.count(vertices[1]) == 1) {
+				uint32_t idx1 = static_cast<uint32_t>(this->vertices.size());
+				uniqueVertices[vertices[1]] = idx1;
+				this->vertices.push_back(vertices[1]);
+			}
+
+			if (uniqueVertices.count(vertices[2]) == 2) {
+				uint32_t idx2 = static_cast<uint32_t>(this->vertices.size());
+				uniqueVertices[vertices[2]] = idx2;
+				this->vertices.push_back(vertices[2]);
+			}*/
+
+			indices.push_back(uniqueVertices[v0]);
+			indices.push_back(uniqueVertices[v1]);
+			indices.push_back(uniqueVertices[v2]);
 		}
 	}
 
@@ -1917,6 +2090,8 @@ void VulkanApplication::initVulkan() {
 	createTextureImage();
 	createTextureImageView();
 	createTextureSampler();
+	createNormalMapImage();
+	createNormalMapImageView();
 	createSkyboxImage();
 	createSkyboxImageView();
 	createSkyboxSampler();
@@ -1939,6 +2114,7 @@ void VulkanApplication::initVulkan() {
 
 void VulkanApplication::mainLoop() {
 	while (!glfwWindowShouldClose(window)) {
+		// This function called "processMouse(xpos, ypos) from the mainCamera variable, which allows the camera to rotate"
 		glfwPollEvents();
 
 		mainCamera.processInput(window);
@@ -2027,7 +2203,12 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo{};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+	glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+
+	ubo.model = rotationY * rotationX;
 	ubo.view = /*glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));*/ mainCamera.getViewMatrix();
 	ubo.proj = glm::perspective(glm::radians(/*45.0f*/70.f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, /*10.0f*/10000.f);
 	
@@ -2088,8 +2269,13 @@ void VulkanApplication::createDescriptorSets() {
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		imageInfo.imageView = textureImageView;
 		imageInfo.sampler = textureSampler;
+
+		VkDescriptorImageInfo normalMapImageInfo{};
+		normalMapImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		normalMapImageInfo.imageView = normalMapImageView;
+		normalMapImageInfo.sampler = textureSampler;
 	
-		std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+		std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[0].dstSet = descriptorSets[i];
 		descriptorWrites[0].dstBinding = 0;
@@ -2105,6 +2291,15 @@ void VulkanApplication::createDescriptorSets() {
 		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptorWrites[1].descriptorCount = 1;
 		descriptorWrites[1].pImageInfo = &imageInfo;
+
+		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[2].dstSet = descriptorSets[i];
+		descriptorWrites[2].dstBinding = 2;
+		descriptorWrites[2].dstArrayElement = 0;
+		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[2].descriptorCount = 1;
+		descriptorWrites[2].pImageInfo = &normalMapImageInfo;
+
 
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
@@ -2130,6 +2325,11 @@ void VulkanApplication::cleanUp() {
 
 	vkDestroyBuffer(device, skyboxVertexBuffer, nullptr);
 	vkFreeMemory(device, skyboxVertexBufferMemory, nullptr);
+
+	// Clean up the normal map
+	vkDestroyImageView(device, normalMapImageView, nullptr);
+	vkDestroyImage(device, normalMapImage, nullptr);
+	vkFreeMemory(device, normalMapImageMemory, nullptr);
 
 	// Clean up the model and it's own texture
 	vkDestroySampler(device, textureSampler, nullptr);

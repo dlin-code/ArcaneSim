@@ -9,11 +9,13 @@ layout(binding = 0) uniform uniformBufferObject {
 } ubo;
 
 layout(binding = 1) uniform sampler2D texSampler;
+layout(binding = 2) uniform sampler2D normalSampler;
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragNormal;
 layout(location = 3) in vec3 fragPos;
+layout(location = 4) in mat3 fragTBN;
 
 layout(location = 0) out vec4 outColor;
 
@@ -23,6 +25,10 @@ void main() {
 	vec3 lightColor = vec3(1.3, 1.3, 1.3);
 
 	vec3 objectColor = texture(texSampler, fragTexCoord).rgb;
+
+	vec3 normalMapColor = texture(normalSampler, fragTexCoord).rgb;
+	vec3 normal = normalize(normalMapColor * 2.0 - 1.0);
+	normal = normalize(fragTBN * normal);
 
 	// Ambient
 	float ambientStrength = 0.35;
