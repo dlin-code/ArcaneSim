@@ -649,17 +649,14 @@ void VulkanApplication::createGraphicsPipeline() {
 		std::cerr << "Fragment shader file is empty!" << std::endl;
 	}
 
+	// Creates Vulkan shader module using the SPIR-V code by passing the binary into "vkCreateShaderModule" via helper function.
 	std::cout << "Creating vertex shader module...\n";
-	vertShaderModule = createShaderModule(vertShaderCode);
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	std::cout << "Vertex shader module created.\n";
 
 	std::cout << "Creating fragment shader module...\n";
-	fragShaderModule = createShaderModule(fragShaderCode);
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 	std::cout << "Fragment shader module created.\n";
-
-	// Creates Vulkan shader module using the SPIR-V code by passing the binary into "vkCreateShaderModule" via helper function.
-	/*VkShaderModule *///vertShaderModule = createShaderModule(vertShaderCode);
-	/*VkShaderModule *///fragShaderModule = createShaderModule(fragShaderCode);
 
 	// Creating shader stage info structs. These structs describes which shaders to use and how.
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
@@ -861,6 +858,9 @@ void VulkanApplication::createGraphicsPipeline() {
 		std::cerr << "vKCreateGraphicsPipelines failed! Error code: " << result << std::endl;
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
+
+	vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
 void VulkanApplication::createFramebuffers() {
@@ -1371,7 +1371,7 @@ void VulkanApplication::createTextureImage() {
 
 void VulkanApplication::createNormalMapImage() {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("../../../textures/viking_room_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load("../../../textures/snow_fight_Field01_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {
@@ -1819,6 +1819,23 @@ void VulkanApplication::loadModel() {
 	}
 
 	std::cout << "Loaded " << vertices.size() << " unique vertices" << std::endl;
+	
+	if (!vertices.empty()) {
+		glm::vec3 minPos = vertices[0].pos;
+		glm::vec3 maxPos = vertices[0].pos;
+		for (const auto& v : vertices) {
+			minPos = glm::min(minPos, v.pos);
+			maxPos = glm::max(maxPos, v.pos);
+		}
+		glm::vec3 size = maxPos - minPos;
+		glm::vec3 center = (minPos + maxPos) * 0.5f;
+
+		std::cout << "=== Model Bounds ===" << std::endl;
+		std::cout << "Min: (" << minPos.x << ", " << minPos.y << ", " << minPos.z << ")" << std::endl;
+		std::cout << "Max: (" << maxPos.x << ", " << maxPos.y << ", " << maxPos.z << ")" << std::endl;
+		std::cout << "Size: (" << size.x << " x " << size.y << " x " << size.z << std::endl;
+		std::cout << "Center: (" << center.x << ", " << center.y << ", " << center.z << ")" << std::endl;
+	}
 }
 
 void VulkanApplication::createSkyboxVertexBuffer() {
@@ -1924,8 +1941,8 @@ void VulkanApplication::createSkyboxPipeline() {
 	auto vertShaderCode = readFile("shaders/skybox_vert.spv");
 	auto fragShaderCode = readFile("shaders/skybox_frag.spv");
 
-	vertShaderModule = createShaderModule(vertShaderCode);
-	fragShaderModule = createShaderModule(fragShaderCode);
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;			
@@ -2107,8 +2124,8 @@ void VulkanApplication::initVulkan() {
 	createSyncObjects();
 
 	// Initialize the camera position and rotation angles
-	mainCamera.position = glm::vec3(0.f, 0.f, 5.f);
-	mainCamera.pitch = 0.f;
+	mainCamera.position = glm::vec3(0.f, 5.f, 5.f);
+	mainCamera.pitch = -0.3f;
 	mainCamera.yaw = 0.f;
 }
 
@@ -2204,17 +2221,22 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 
 	UniformBufferObject ubo{};
 
+	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.0001f, 0.0001f, 0.0001f));
+
+	glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+
+
 	glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 
-	ubo.model = rotationY * rotationX;
+	ubo.model = translation * rotationY * rotationX * scale/*glm::mat4(1.0f)*/;
 	ubo.view = /*glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));*/ mainCamera.getViewMatrix();
 	ubo.proj = glm::perspective(glm::radians(/*45.0f*/70.f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, /*10.0f*/10000.f);
 	
 	ubo.proj[1][1] *= -1;
 
-	ubo.lightPos = glm::vec3(3.0f, 3.0f, 3.0f);
+	ubo.lightPos = glm::vec3(20.0f, 30.0f, 20.0f);
 
 	ubo.viewPos = /*glm::vec3(2.0f, 2.0f, 2.0f)*/mainCamera.position;
 
@@ -2367,8 +2389,8 @@ void VulkanApplication::cleanUp() {
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
 	
-	vkDestroyShaderModule(device, fragShaderModule, nullptr);
-	vkDestroyShaderModule(device, vertShaderModule, nullptr);
+	/*vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(device, vertShaderModule, nullptr);*/
 	
 	vkDestroyDevice(device, nullptr);
 	

@@ -52,8 +52,8 @@ private:
 	const uint32_t WIDTH = 800;																		// The current window size.
 	const uint32_t HEIGHT = 600;
 
-	const std::string MODEL_PATH = "../../../models/viking_room.obj";
-	const std::string TEXTURE_PATH = "../../../textures/viking_room.png";
+	const std::string MODEL_PATH = "../../../models/snow_fight_Field.obj";
+	const std::string TEXTURE_PATH = "../../../textures/snow_field.png";
 
 	const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -155,9 +155,6 @@ private:
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities/*, GLFWwindow* window*/);
-
-	VkShaderModule vertShaderModule;
-	VkShaderModule fragShaderModule;
 
 	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
