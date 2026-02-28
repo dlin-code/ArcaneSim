@@ -1,12 +1,15 @@
 #version 450
 
 layout(binding = 0) uniform uniformBufferObject {
-	mat4 model;
 	mat4 view;
 	mat4 proj;
 	vec3 lightPos;
 	vec3 viewPos;
 } ubo;
+
+layout(push_constant) uniform PushConstants {
+	mat4 model;
+} pushConstants;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
@@ -22,17 +25,17 @@ layout(location = 3) out vec3 fragPos;
 layout(location = 4) out mat3 fragTBN;
 
 void main() {
-	vec4 worldPos = ubo.model * vec4(inPosition, 1.0);
+	vec4 worldPos = pushConstants.model * vec4(inPosition, 1.0);
 	fragPos = worldPos.xyz;
 
 	gl_Position = ubo.proj * ubo.view * worldPos;
 
 	fragColor = inColor;
 	fragTexCoord = inTexCoord;
-	fragNormal = mat3(ubo.model) * inNormal;
+	fragNormal = mat3(pushConstants.model) * inNormal;
 
-	vec3 T = normalize(mat3(ubo.model) * inTangent);
-	vec3 N = normalize(mat3(ubo.model) * inNormal);
+	vec3 T = normalize(mat3(pushConstants.model) * inTangent);
+	vec3 N = normalize(mat3(pushConstants.model) * inNormal);
 	vec3 B = normalize(cross(N, T));
 	fragTBN = mat3(T, B, N);
 }

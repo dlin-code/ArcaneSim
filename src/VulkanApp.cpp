@@ -800,13 +800,19 @@ void VulkanApplication::createGraphicsPipeline() {
 	colorBlending.blendConstants[2] = 0.0f;
 	colorBlending.blendConstants[3] = 0.0f;
 
+	// Define push constant range
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(PushConstants);
+
 	// Pipeline layout
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;																			// Struct type for creating a pipeline layout.
 	pipelineLayoutInfo.setLayoutCount = 1;																												// No descriptor sets used for now. A descriptor set layout defines what kind of GPU resources (like textures, uniform buffers, etc.) the shaders can access and how those resources are bound.
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;																											// Pointer to descriptor set layouts (unused)
-	pipelineLayoutInfo.pushConstantRangeCount = 0;																										// No push constants used for now. A push constant buffer is a small chunk of data (a few bytes) that you can quickly update and pass to shaders - much faster than updating a buffer.
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;																									// Pointer to push constant ranges (unused)
+	pipelineLayoutInfo.pushConstantRangeCount = 1;																										// No push constants used for now. A push constant buffer is a small chunk of data (a few bytes) that you can quickly update and pass to shaders - much faster than updating a buffer.
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;																									// Pointer to push constant ranges (unused)
 
 	// Create the pipeline layout object using the above info
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
@@ -949,24 +955,6 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline);
-
-	VkBuffer skyboxVertexBuffers[] = { skyboxVertexBuffer };
-	VkDeviceSize skyboxOffsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, skyboxVertexBuffers, skyboxOffsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipelineLayout, 0, 1, &skyboxDescriptorSets[currentFrame], 0, nullptr);
-
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(skyboxVertices.size()), 1, 0, 0);
-
-
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-
-	VkBuffer vertexBuffers[] = {vertexBuffer};
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
 	VkViewport viewport{};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -981,11 +969,58 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline);
+
+	VkBuffer skyboxVertexBuffers[] = { skyboxVertexBuffer };
+	VkDeviceSize skyboxOffsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, skyboxVertexBuffers, skyboxOffsets);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipelineLayout, 0, 1, &skyboxDescriptorSets[currentFrame], 0, nullptr);
+
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(skyboxVertices.size()), 1, 0, 0);
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+	// Rendering the snow mountain
+	PushConstants mountainPushConstants{};
+	glm::mat4 mountainScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.05f, 0.05f, 0.05f));
+	glm::mat4 mountainTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f));
+	mountainPushConstants.model = mountainTranslation * mountainScale;
+
+	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &mountainPushConstants);
+
+	VkBuffer mountainVertexBuffers[] = {vertexBuffer};
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, mountainVertexBuffers, offsets);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
 	vkCmdDrawIndexed(
 		commandBuffer, 
 		static_cast<uint32_t>(indices.size()), 
 		1, 
 		0, 
+		0,
+		0
+	);
+
+	// Rendering the tower
+	PushConstants towerPushConstants{};
+	glm::mat4 towerScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.8f, 0.8f, 0.8f));
+	glm::mat4 towerTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, -1.8f, 4.0f));
+	towerPushConstants.model = towerTranslation * towerScale;
+
+	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &towerPushConstants);
+
+	VkBuffer towerVertexBuffers[] = { towerVertexBuffer };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, towerVertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, towerIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+	
+	vkCmdDrawIndexed(
+		commandBuffer,
+		static_cast<uint32_t>(towerIndices.size()),
+		1,
+		0,
 		0,
 		0
 	);
@@ -1052,31 +1087,7 @@ void VulkanApplication::recreateSwapChain() {
 	createFramebuffers();
 }
 
-void VulkanApplication::createVertexBuffer() {
-	/*VkBufferCreateInfo bufferInfo{};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	 
-	if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create vertex buffer!");
-	}
-
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate vertex buffer memory!");
-	}
-
-	vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);*/
-
+void VulkanApplication::createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory) {
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 	
 	VkBuffer stagingBuffer;
@@ -1180,7 +1191,7 @@ void VulkanApplication::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDev
 	endSingleTimeCommands(commandBuffer);
 }
 
-void VulkanApplication::createIndexBuffer() {
+void VulkanApplication::createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory) {
 	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
 	VkBuffer stagingBuffer;
@@ -1371,7 +1382,7 @@ void VulkanApplication::createTextureImage() {
 
 void VulkanApplication::createNormalMapImage() {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("../../../textures/snow_fight_Field01_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load("../../../textures/mountain_diffuse_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {
@@ -1631,14 +1642,14 @@ void VulkanApplication::createSkyboxSampler() {
 	}
 }
 
-void VulkanApplication::loadModel() {
+void VulkanApplication::loadModel(const std::string& modelPath, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices) {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string err;
 	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
-	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, &err, MODEL_PATH.c_str())) {
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, nullptr, &err, modelPath.c_str())) {
 		throw std::runtime_error(err);
 	}
 
@@ -1780,18 +1791,18 @@ void VulkanApplication::loadModel() {
 			v2.bitangent = glm::vec3(0.0f);
 
 			if (uniqueVertices.count(v0) == 0) {
-				uniqueVertices[v0] = static_cast<uint32_t>(vertices.size());
-				vertices.push_back(v0);
+				uniqueVertices[v0] = static_cast<uint32_t>(outVertices.size());
+				outVertices.push_back(v0);
 			}
 
 			if (uniqueVertices.count(v1) == 0) {
-				uniqueVertices[v1] = static_cast<uint32_t>(vertices.size());
-				vertices.push_back(v1);
+				uniqueVertices[v1] = static_cast<uint32_t>(outVertices.size());
+				outVertices.push_back(v1);
 			}
 
 			if (uniqueVertices.count(v2) == 0) {
-				uniqueVertices[v2] = static_cast<uint32_t>(vertices.size());
-				vertices.push_back(v2);
+				uniqueVertices[v2] = static_cast<uint32_t>(outVertices.size());
+				outVertices.push_back(v2);
 			}
 
 			/*if (uniqueVertices.count(vertices[0]) == 0) {
@@ -1812,9 +1823,11 @@ void VulkanApplication::loadModel() {
 				this->vertices.push_back(vertices[2]);
 			}*/
 
-			indices.push_back(uniqueVertices[v0]);
-			indices.push_back(uniqueVertices[v1]);
-			indices.push_back(uniqueVertices[v2]);
+			outIndices.push_back(uniqueVertices[v0]);
+			outIndices.push_back(uniqueVertices[v1]);
+			outIndices.push_back(uniqueVertices[v2]);
+
+			std::cout << "Loaded " << outVertices.size() << " unique vertices from " << modelPath << std::endl;
 		}
 	}
 
@@ -2112,9 +2125,15 @@ void VulkanApplication::initVulkan() {
 	createSkyboxImage();
 	createSkyboxImageView();
 	createSkyboxSampler();
-	loadModel();
-	createVertexBuffer();
-	createIndexBuffer();
+
+	loadModel(MODEL_PATH, vertices, indices);
+	createVertexBuffer(vertices, vertexBuffer, vertexBufferMemory);
+	createIndexBuffer(indices, indexBuffer, indexBufferMemory);
+
+	loadModel("../../../models/medieval_tower.obj", towerVertices, towerIndices);
+	createVertexBuffer(towerVertices, towerVertexBuffer, towerVertexBufferMemory);
+	createIndexBuffer(towerIndices, towerIndexBuffer, towerIndexBufferMemory);
+
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
 	createDescriptorPool();
@@ -2220,17 +2239,7 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo{};
-
-	glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.0001f, 0.0001f, 0.0001f));
-
-	glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-
-
-	glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(270.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-	glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), /*time * */glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-
-	ubo.model = translation * rotationY * rotationX * scale/*glm::mat4(1.0f)*/;
+	
 	ubo.view = /*glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));*/ mainCamera.getViewMatrix();
 	ubo.proj = glm::perspective(glm::radians(/*45.0f*/70.f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, /*10.0f*/10000.f);
 	

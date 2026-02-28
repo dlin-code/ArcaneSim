@@ -39,11 +39,14 @@ struct SwapChainSupportDetails {
 };
 
 struct UniformBufferObject {
-	alignas(16) glm::mat4 model;
 	alignas(16) glm::mat4 view;
 	alignas(16) glm::mat4 proj;
 	alignas(16) glm::vec3 lightPos;
 	alignas(16) glm::vec3 viewPos;
+};
+
+struct PushConstants {
+	glm::mat4 model;
 };
 
 class VulkanApplication
@@ -52,8 +55,8 @@ private:
 	const uint32_t WIDTH = 800;																		// The current window size.
 	const uint32_t HEIGHT = 600;
 
-	const std::string MODEL_PATH = "../../../models/snow_fight_Field.obj";
-	const std::string TEXTURE_PATH = "../../../textures/snow_field.png";
+	const std::string MODEL_PATH = "../../../models/great_mountain.obj";
+	const std::string TEXTURE_PATH = "../../../textures/mountain_diffuse.jpg";
 
 	const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -222,6 +225,15 @@ private:
 	VkDeviceMemory normalMapImageMemory = VK_NULL_HANDLE;
 	VkImageView normalMapImageView = VK_NULL_HANDLE;
 
+	// Medieval tower
+	std::vector<Vertex> towerVertices;
+	std::vector<uint32_t> towerIndices;
+
+	VkBuffer towerVertexBuffer;
+	VkDeviceMemory towerVertexBufferMemory;
+	VkBuffer towerIndexBuffer;
+	VkDeviceMemory towerIndexBufferMemory;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -245,14 +257,14 @@ public:
 	void createCommandBuffer();
 	void recordCommandBuffer(VkCommandBuffer, uint32_t);
 	void createSyncObjects();
-	void createVertexBuffer();
+	void createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
 	uint32_t findMemoryType(uint32_t, VkMemoryPropertyFlags);
 
 	void createBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
 
 	void copyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
 
-	void createIndexBuffer();
+	void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
 	void createUniformBuffers();
 
 	void createDescriptorSetLayout();
@@ -286,7 +298,7 @@ public:
 
 	void createTextureSampler();
 
-	void loadModel();
+	void loadModel(const std::string& modelPath, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
 	void initVulkan();
 

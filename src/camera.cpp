@@ -77,6 +77,6 @@ glm::mat4 Camera::getViewMatrix() {
 
 void Camera::update() {
 	glm::mat4 cameraRotation = getRotationMatrix();
-	position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f));
+	position += glm::vec3(cameraRotation * glm::vec4(velocity * 5.0f, 0.f));
 
 }
