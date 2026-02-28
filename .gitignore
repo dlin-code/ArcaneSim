@@ -26,9 +26,18 @@ Makefile
 # Binaries
 *.exe
 *.dll
-*.obj
 *.lib
 *.pdb
+
+# Object files from compilation (not 3D models)
+x64/**/*.obj
+Debug/**/*.obj
+Release/**/*.obj
+out/**/*.obj
+*.vcxproj.user
+
+# Track 3D model files
+!models/*.obj
 
 # GLFW build output
 external/glfw/out/
