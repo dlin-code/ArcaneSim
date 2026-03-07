@@ -1,0 +1,321 @@
+#pragma once
+#include <vulkan/vulkan.h>
+
+#define GLFW_INCLUDE_VULKAN																		// GLFW_INCLUDE_VULKAN tells GLFW to include Vulkan headers for you.
+#include <GLFW/glfw3.h>																			// Line 5-6 makes glfwCreateWindow Vulkan_aware.
+#include <string>
+#include <vector>
+#include <map>
+#include <optional>
+
+#include <set>
+#include <algorithm>	// Necessary for std::clamp
+
+#include <cstdint>		// for uint16_t
+
+#include "vertex.h"
+#include "camera.h"
+
+#ifdef NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
+
+// Holds the indices of the queue families for graphics and presentation, if found. ".isComplete()" returns true if both are set.
+struct QueueFamilyIndices {
+	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
+
+	bool isComplete() {
+		return graphicsFamily.has_value() && presentFamily.has_value();
+	};
+};
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+};
+
+struct UniformBufferObject {
+	alignas(16) glm::mat4 view;
+	alignas(16) glm::mat4 proj;
+	alignas(16) glm::vec3 lightPos;
+	alignas(16) glm::vec3 viewPos;
+};
+
+struct PushConstants {
+	glm::mat4 model;
+};
+
+class VulkanApplication
+{
+private:
+	const uint32_t WIDTH = 800;																		// The current window size.
+	const uint32_t HEIGHT = 600;
+
+	const std::string MODEL_PATH = "../../../models/great_mountain.obj";
+	const std::string TEXTURE_PATH = "../../../textures/mountain_diffuse.jpg";
+
+	const std::vector<const char*> validationLayers = {
+	"VK_LAYER_KHRONOS_validation"
+	};
+	const std::vector<const char*> deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
+	std::vector<VkImage> swapChainImages;
+
+	/*const std::vector<Vertex> vertices = {
+		{{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+		{{0.5f, -0.5f, 0.0f}, {0.0f, 0.25f, 0.75f}, {0.0f, 0.0f}},
+		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.5f, 1.0f}, {0.0f, 1.0f}},
+		{{-0.5f, 0.5f, 0.0f}, {0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}},
+
+		{{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+		{{0.5f, -0.5f, -0.5f}, {0.0f, 0.25f, 0.75f}, {0.0f, 0.0f}},
+		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.5f, 1.0f}, {0.0f, 1.0f}},
+		{{-0.5f, 0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}, {1.0f, 1.0f}},
+	};*/
+
+	const std::vector<glm::vec3> skybox_vertices = {
+		// Back
+		{-1.0f,  1.0f, -1.0f},
+		{-1.0f, -1.0f, -1.0f},
+		{ 1.0f, -1.0f, -1.0f},
+		{ 1.0f,	-1.0f, -1.0f},
+		{ 1.0f,  1.0f, -1.0f},
+		{-1.0f,  1.0f, -1.0f},
+
+		// Front
+		{-1.0f, -1.0f, 1.0f},
+		{-1.0f,  1.0f, 1.0f},
+		{ 1.0f,  1.0f, 1.0f},
+		{ 1.0f,  1.0f, 1.0f},
+		{ 1.0f, -1.0f, 1.0f},
+		{-1.0f, -1.0f, 1.0f},
+
+		// Left
+		{-1.0f,  1.0f,  1.0f},
+		{-1.0f,  1.0f, -1.0f},
+		{-1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f,  1.0f},
+		{-1.0f,  1.0f,  1.0f},
+
+		// Right
+		{1.0f,  1.0f, -1.0f},
+		{1.0f,  1.0f,  1.0f},
+		{1.0f, -1.0f,  1.0f},
+		{1.0f, -1.0f,  1.0f},
+		{1.0f, -1.0f, -1.0f},
+		{1.0f,  1.0f, -1.0f},
+
+		// Top
+		{-1.0f,  1.0f, -1.0f},
+		{ 1.0f,  1.0f, -1.0f},
+		{ 1.0f,  1.0f,  1.0f},
+		{ 1.0f,  1.0f,  1.0f},
+		{-1.0f,  1.0f,  1.0f},
+		{-1.0f,  1.0f, -1.0f},
+
+		// Bottom
+		{-1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f,  1.0f},
+		{ 1.0f, -1.0f,  1.0f},
+		{ 1.0f, -1.0f,  1.0f},
+		{ 1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f, -1.0f}
+	};
+
+	std::vector<Vertex> vertices;
+
+	/*const std::vector<uint16_t> indices = {
+		0, 1, 2 , 2, 3, 0,
+		4, 5, 6 , 6, 7, 4
+	};*/
+
+	std::vector<uint32_t> indices;
+
+	GLFWwindow* window = nullptr;
+
+	VkInstance instance;
+	VkSurfaceKHR surface;
+	VkDevice device;
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;								// Start with no device selected.
+	VkQueue graphicsQueue;
+	VkQueue presentQueue;
+	VkSwapchainKHR swapChain;
+
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice physicalDevice);
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice physicalDevice);
+	
+	bool checkDeviceExtensionSupport(VkPhysicalDevice physicalDevice);
+	bool isDeviceSuitable(VkPhysicalDevice physicalDevice);
+	int rateDeviceSuitability(VkPhysicalDevice physicalDevice);
+	
+	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities/*, GLFWwindow* window*/);
+
+	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkPipelineLayout pipelineLayout;
+
+	VkPipeline graphicsPipeline{};
+
+	VkDebugUtilsMessengerEXT debugMessenger;
+
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+
+	VkCommandPool commandPool;
+	std::vector<VkCommandBuffer> commandBuffers;
+
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+	std::vector<VkFence> inFlightFences;
+
+	const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+	uint32_t currentFrame = 0;
+
+	bool framebufferResized = false;
+
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
+
+	VkImage depthImage;
+	VkDeviceMemory depthImageMemory;
+	VkImageView depthImageView;
+
+	VkImage textureImage;
+	VkDeviceMemory textureImageMemory;
+
+	VkImageView textureImageView;
+	VkSampler textureSampler;
+
+	VkPhysicalDeviceProperties deviceProperties;
+
+	// Skybox
+	std::vector<Vertex> skyboxVertices;
+	VkBuffer skyboxVertexBuffer;
+	VkDeviceMemory skyboxVertexBufferMemory;
+
+	VkImage skyboxImage;
+	VkDeviceMemory skyboxImageMemory;
+	VkImageView skyboxImageView;
+	VkSampler skyboxSampler;
+
+	VkDescriptorSetLayout skyboxDescriptorSetLayout;
+	VkPipelineLayout skyboxPipelineLayout;
+	VkPipeline skyboxPipeline;
+	std::vector<VkDescriptorSet> skyboxDescriptorSets;
+
+	VkImage normalMapImage = VK_NULL_HANDLE;
+	VkDeviceMemory normalMapImageMemory = VK_NULL_HANDLE;
+	VkImageView normalMapImageView = VK_NULL_HANDLE;
+
+	// Medieval tower
+	std::vector<Vertex> towerVertices;
+	std::vector<uint32_t> towerIndices;
+
+	VkBuffer towerVertexBuffer;
+	VkDeviceMemory towerVertexBufferMemory;
+	VkBuffer towerIndexBuffer;
+	VkDeviceMemory towerIndexBufferMemory;
+
+public:
+	std::vector<VkImageView> swapChainImageViews;
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
+	Camera mainCamera;
+
+	void initWindow(/*GLFWwindow*& window*/);
+	static void framebufferResizeCallback(GLFWwindow*, int, int);
+	void createInstance();
+	void createSurface(/*GLFWwindow* window*/);
+	void pickPhysicalDevice();
+	void createLogicalDevice();
+	void createSwapChain(/*GLFWwindow* window*/);
+	void createImageViews();
+
+	void createGraphicsPipeline();
+	VkShaderModule createShaderModule(const std::vector<char>& code);
+	void createRenderPass();
+	void createFramebuffers();
+	void createCommandPool();
+	void createCommandBuffer();
+	void recordCommandBuffer(VkCommandBuffer, uint32_t);
+	void createSyncObjects();
+	void createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& vertexBuffer, VkDeviceMemory& vertexBufferMemory);
+	uint32_t findMemoryType(uint32_t, VkMemoryPropertyFlags);
+
+	void createBuffer(VkDeviceSize, VkBufferUsageFlags, VkMemoryPropertyFlags, VkBuffer&, VkDeviceMemory&);
+
+	void copyBuffer(VkBuffer, VkBuffer, VkDeviceSize);
+
+	void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& indexBuffer, VkDeviceMemory& indexBufferMemory);
+	void createUniformBuffers();
+
+	void createDescriptorSetLayout();
+	void createDescriptorPool();
+	void createDescriptorSets();
+
+	void updateUniformBuffer(uint32_t);
+
+	void createDepthResources();
+
+	VkFormat findSupportedFormat(const std::vector<VkFormat>&, VkImageTiling, VkFormatFeatureFlags);
+	VkFormat findDepthFormat();
+
+	bool hasStencilComponent(VkFormat);
+
+	void createImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	VkImageView createImageView(VkImage, VkImageViewType, VkFormat, VkImageAspectFlags, uint32_t);
+
+	void createTextureImage();
+	void createNormalMapImage();
+
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer);
+
+	void transitionImageLayout(VkImage, VkFormat, VkImageLayout, VkImageLayout, uint32_t);
+
+	void copyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t, uint32_t);
+
+	void createTextureImageView();
+	void createNormalMapImageView();
+
+	void createTextureSampler();
+
+	void loadModel(const std::string& modelPath, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
+
+	void initVulkan();
+
+	void mainLoop(/*GLFWwindow* window*/);
+
+	void drawFrame();
+
+	void cleanupSwapChain();
+	void recreateSwapChain();
+
+	void createSkyboxVertexBuffer();
+	void createSkyboxImage();
+	void createSkyboxImageView();
+	void createSkyboxSampler();
+	void createSkyboxDescriptorSetLayout();
+	void createSkyboxDescriptorSets();
+	void createSkyboxPipeline();
+
+	void cleanUp(/*GLFWwindow* window*/);
+};
