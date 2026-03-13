@@ -1,10 +1,10 @@
 # ArcaneSim
 
-A Vulkan-based 3D rendering engine featuring snow terrain and medieval tower inside a skybox.
+A Vulkan-based 3D rendering engine featuring snow terrain, a medieval tower, and a dead tree inside a skybox.
 
 ## Overview
 
-ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the Vulkan graphics API. The project showcases a snowy mountain landscape with a medieval stone tower, showcasing techniques like normal mapping, Phong lighting, and skybox rendering.
+ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the Vulkan graphics API. The project showcases a snowy mountain landscape with a medieval stone tower and a dead tree, showcasing techniques like normal mapping, Phong lighting, and skybox rendering.
 
 ## Features
 
@@ -14,7 +14,7 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 - **Skybox Rendering** - 360-degree cubemap environment with depth optimisation
 - **Interactive Camera** - First-person controls with WASDQE movement and mouse look
 - **Push Constants** - Efficient per-object transforms for rendering multiple models
-- **Multi-Model Scene** - Terrain and architecture with separate geometry
+- **Multi-Model Scene** - Snow mountain terrain, medieval tower, and dead tree with individual textures
 
 ## Technical Stack
 
@@ -52,6 +52,16 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 - Clone the repository
 - Compile the shaders (run compile.bat in shaders folder)
 - Visual Studio Build and run
+
+## Credits
+
+### 3D Models
+- **Great Mountain** by Gesy - [Sketchfab](https://sketchfab.com/3d-models/great-mountain-dd826f1f05c544ccb671949ebca59721)
+- **Kickelhahn Tower** by 3DHaupt - [Sketchfab](https://sketchfab.com/3d-models/kickelhahn-tower-weyeuTkdMADFF53EZq4U38mmx3P)
+- **Low Poly: Dead Tree** by ClintonAbbott.Art - [Sketchfab](https://sketchfab.com/3d-models/low-poly-dead-tree-addc2aef9e534a93a8798320fea440ef)
+
+### Textures
+- **Skybox textures** from LearnOpenGL by Joey de Vries - [learnopengl.com](https://learnopengl.com/Advanced-OpenGL/Cubemaps)
 
 ## Why I made this
 
