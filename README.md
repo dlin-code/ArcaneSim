@@ -40,6 +40,9 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 ![Top-down View](screenshots/top_down_view.png)
 *Aerial perspective of the scene*
 
+![Dead Tree View](screenshots/dead_tree_view.png)
+*Snow mountain terrain with medieval tower and dead tree*
+
 ## Controls
 
 - **Movements:** WASD
