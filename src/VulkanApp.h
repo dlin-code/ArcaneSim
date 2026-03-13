@@ -55,8 +55,15 @@ private:
 	const uint32_t WIDTH = 800;																		// The current window size.
 	const uint32_t HEIGHT = 600;
 
-	const std::string MODEL_PATH = "../../../models/great_mountain.obj";
-	const std::string TEXTURE_PATH = "../../../textures/mountain_diffuse.jpg";
+	const std::string SNOWMOUNTAIN_MODEL_PATH = "../../../models/great_mountain.obj";
+	const std::string SNOWMOUNTAIN_TEXTURE_PATH = "../../../textures/mountain_diffuse.jpg";
+	const std::string SNOWMOUNTAIN_NORMAL_MAP_PATH = "../../../textures/mountain_diffuse_normal.png";
+
+	const std::string TOWER_MODEL_PATH = "../../../models/medieval_tower.obj";
+
+	const std::string DEAD_TREE_MODEL_PATH = "../../../models/DeadTree_LoPoly.obj";
+	const std::string DEAD_TREE_TEXTURE_PATH = "../../../textures/DeadTree_LoPoly_DeadTree_Diffuse.png";
+	const std::string DEAD_TREE_NORMAL_MAP_PATH = "../../../textures/DeadTree_LoPoly_DeadTree_Normal.png";
 
 	const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
@@ -198,11 +205,15 @@ private:
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
 
-	VkImage textureImage;
-	VkDeviceMemory textureImageMemory;
+	VkImage snowMountainImage;
+	VkDeviceMemory snowMountainImageMemory;
 
-	VkImageView textureImageView;
+	VkImageView snowMountainImageView;
 	VkSampler textureSampler;
+
+	VkImage snowMountainNormalMapImage = VK_NULL_HANDLE;
+	VkDeviceMemory snowMountainNormalMapImageMemory = VK_NULL_HANDLE;
+	VkImageView snowMountainNormalMapImageView = VK_NULL_HANDLE;
 
 	VkPhysicalDeviceProperties deviceProperties;
 
@@ -221,10 +232,6 @@ private:
 	VkPipeline skyboxPipeline;
 	std::vector<VkDescriptorSet> skyboxDescriptorSets;
 
-	VkImage normalMapImage = VK_NULL_HANDLE;
-	VkDeviceMemory normalMapImageMemory = VK_NULL_HANDLE;
-	VkImageView normalMapImageView = VK_NULL_HANDLE;
-
 	// Medieval tower
 	std::vector<Vertex> towerVertices;
 	std::vector<uint32_t> towerIndices;
@@ -234,19 +241,38 @@ private:
 	VkBuffer towerIndexBuffer;
 	VkDeviceMemory towerIndexBufferMemory;
 
+	// Dead tree
+	std::vector<Vertex> deadTreeVertices;
+	std::vector<uint32_t> deadTreeIndices;
+
+	VkBuffer deadTreeVertexBuffer;
+	VkDeviceMemory deadTreeVertexBufferMemory;
+	VkBuffer deadTreeIndexBuffer;
+	VkDeviceMemory deadTreeIndexBufferMemory;
+
+	VkImage deadTreeImage;
+	VkDeviceMemory deadTreeImageMemory;
+	VkImageView deadTreeImageView;
+
+	VkImage deadTreeNormalMapImage = VK_NULL_HANDLE;
+	VkDeviceMemory deadTreeNormalMapImageMemory = VK_NULL_HANDLE;
+	VkImageView deadTreeNormalMapImageView = VK_NULL_HANDLE;
+
+	std::vector<VkDescriptorSet> deadTreeDescriptorSets;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 	Camera mainCamera;
 
-	void initWindow(/*GLFWwindow*& window*/);
+	void initWindow();
 	static void framebufferResizeCallback(GLFWwindow*, int, int);
 	void createInstance();
-	void createSurface(/*GLFWwindow* window*/);
+	void createSurface();
 	void pickPhysicalDevice();
 	void createLogicalDevice();
-	void createSwapChain(/*GLFWwindow* window*/);
+	void createSwapChain();
 	void createImageViews();
 
 	void createGraphicsPipeline();
@@ -269,7 +295,7 @@ public:
 
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
-	void createDescriptorSets();
+	void createDescriptorSets(std::vector<VkDescriptorSet>& descriptorSets, VkImageView textureImageView, VkImageView normalMapImageView, VkSampler textureSampler);
 
 	void updateUniformBuffer(uint32_t);
 
@@ -283,8 +309,8 @@ public:
 	void createImage(uint32_t, uint32_t, VkFormat, VkImageTiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	VkImageView createImageView(VkImage, VkImageViewType, VkFormat, VkImageAspectFlags, uint32_t);
 
-	void createTextureImage();
-	void createNormalMapImage();
+	void createTextureImage(const std::string texturePath, VkImage& textureImage, VkDeviceMemory& textureImangeMemory);
+	void createNormalMapImage(const std::string normalMapPath, VkImage& normalMapImage, VkDeviceMemory& normalMapImageMemory);
 
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer);
@@ -293,16 +319,16 @@ public:
 
 	void copyBufferToImage(VkBuffer, VkImage, uint32_t, uint32_t, uint32_t);
 
-	void createTextureImageView();
-	void createNormalMapImageView();
+	void createTextureImageView(VkImage textureImage, VkImageView& imageView);
+	void createNormalMapImageView(VkImage normalMapImage, VkImageView& normalMapImageView);
 
-	void createTextureSampler();
+	void createTextureSampler(VkSampler& sampler);
 
 	void loadModel(const std::string& modelPath, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
 	void initVulkan();
 
-	void mainLoop(/*GLFWwindow* window*/);
+	void mainLoop();
 
 	void drawFrame();
 
@@ -317,5 +343,5 @@ public:
 	void createSkyboxDescriptorSets();
 	void createSkyboxPipeline();
 
-	void cleanUp(/*GLFWwindow* window*/);
+	void cleanUp();
 };

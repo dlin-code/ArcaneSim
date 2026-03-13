@@ -810,9 +810,9 @@ void VulkanApplication::createGraphicsPipeline() {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;																			// Struct type for creating a pipeline layout.
 	pipelineLayoutInfo.setLayoutCount = 1;																												// No descriptor sets used for now. A descriptor set layout defines what kind of GPU resources (like textures, uniform buffers, etc.) the shaders can access and how those resources are bound.
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;																											// Pointer to descriptor set layouts (unused)
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;																								// Pointer to descriptor set layouts (unused)
 	pipelineLayoutInfo.pushConstantRangeCount = 1;																										// No push constants used for now. A push constant buffer is a small chunk of data (a few bytes) that you can quickly update and pass to shaders - much faster than updating a buffer.
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;																									// Pointer to push constant ranges (unused)
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;																						// Pointer to push constant ranges (unused)
 
 	// Create the pipeline layout object using the above info
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
@@ -969,6 +969,7 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	// Rendering the skybox
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline);
 
 	VkBuffer skyboxVertexBuffers[] = { skyboxVertexBuffer };
@@ -1005,8 +1006,8 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 
 	// Rendering the tower
 	PushConstants towerPushConstants{};
-	glm::mat4 towerScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.8f, 0.8f, 0.8f));
-	glm::mat4 towerTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, -1.8f, 4.0f));
+	glm::mat4 towerScale = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+	glm::mat4 towerTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(-5.0f, -2.0f, 4.0f));
 	towerPushConstants.model = towerTranslation * towerScale;
 
 	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &towerPushConstants);
@@ -1024,6 +1025,21 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 		0,
 		0
 	);
+
+	// Rendering the dead tree
+	PushConstants deadTreePushConstants{};
+	glm::mat4 deadTreeScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+	glm::mat4 deadTreeTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -10.0f, -40.0f));
+	deadTreePushConstants.model = deadTreeTranslation * deadTreeScale;
+
+	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &deadTreePushConstants);
+
+	VkBuffer deadTreeVertexBuffers[] = { deadTreeVertexBuffer };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, deadTreeVertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, deadTreeIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &deadTreeDescriptorSets[currentFrame], 0, nullptr);
+	
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1347,10 +1363,10 @@ VkImageView VulkanApplication::createImageView(VkImage image, VkImageViewType vi
 	return imageView;
 }
 
-void VulkanApplication::createTextureImage() {
+void VulkanApplication::createTextureImage(const std::string texturePath, VkImage& textureImage, VkDeviceMemory& textureImageMemory) {
 	int texWidth, texHeight, texChannels;
 	//std::cout << "Loading texture:: " << TEXTURE_PATH << std::endl;
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(texturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {
@@ -1380,9 +1396,9 @@ void VulkanApplication::createTextureImage() {
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void VulkanApplication::createNormalMapImage() {
+void VulkanApplication::createNormalMapImage(const std::string normalMapPath, VkImage& normalMapImage, VkDeviceMemory& normalMapImageMemory) {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("../../../textures/mountain_diffuse_normal.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load(normalMapPath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	VkDeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {
@@ -1567,15 +1583,15 @@ void VulkanApplication::copyBufferToImage(VkBuffer buffer, VkImage image, uint32
 	endSingleTimeCommands(commandBuffer);
 }
 
-void VulkanApplication::createTextureImageView() {
-	textureImageView = createImageView(textureImage, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+void VulkanApplication::createTextureImageView(VkImage textureImage, VkImageView& imageView) {
+	imageView = createImageView(textureImage, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
-void VulkanApplication::createNormalMapImageView() {
+void VulkanApplication::createNormalMapImageView(VkImage normalMapImage, VkImageView& normalMapImageView) {
 	normalMapImageView = createImageView(normalMapImage, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
-void VulkanApplication::createTextureSampler() {
+void VulkanApplication::createTextureSampler(VkSampler& sampler) {
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -1600,7 +1616,7 @@ void VulkanApplication::createTextureSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 0.0f;
 
-	if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create texture sampler!");
 	}
 }
@@ -2110,34 +2126,47 @@ void VulkanApplication::initVulkan() {
 	createSwapChain();
 	createImageViews();
 	createRenderPass();
+
 	createDescriptorSetLayout();
 	createSkyboxDescriptorSetLayout();
+
 	createGraphicsPipeline();
 	createSkyboxPipeline();
 	createDepthResources();
 	createFramebuffers();
 	createCommandPool();
-	createTextureImage();
-	createTextureImageView();
-	createTextureSampler();
-	createNormalMapImage();
-	createNormalMapImageView();
+	createTextureImage(SNOWMOUNTAIN_TEXTURE_PATH, snowMountainImage, snowMountainImageMemory);
+	createTextureImageView(snowMountainImage, snowMountainImageView);
+	createTextureSampler(textureSampler);
+	createNormalMapImage(SNOWMOUNTAIN_NORMAL_MAP_PATH, snowMountainNormalMapImage, snowMountainNormalMapImageMemory);
+	createNormalMapImageView(snowMountainNormalMapImage, snowMountainNormalMapImageView);
+
+	createTextureImage(DEAD_TREE_TEXTURE_PATH, deadTreeImage, deadTreeImageMemory);
+	createTextureImageView(deadTreeImage, deadTreeImageView);
+	createNormalMapImage(DEAD_TREE_NORMAL_MAP_PATH, deadTreeNormalMapImage, deadTreeNormalMapImageMemory);
+	createNormalMapImageView(deadTreeNormalMapImage, deadTreeNormalMapImageView);
+
 	createSkyboxImage();
 	createSkyboxImageView();
 	createSkyboxSampler();
 
-	loadModel(MODEL_PATH, vertices, indices);
+	loadModel(SNOWMOUNTAIN_MODEL_PATH, vertices, indices);
 	createVertexBuffer(vertices, vertexBuffer, vertexBufferMemory);
 	createIndexBuffer(indices, indexBuffer, indexBufferMemory);
 
-	loadModel("../../../models/medieval_tower.obj", towerVertices, towerIndices);
+	loadModel(TOWER_MODEL_PATH, towerVertices, towerIndices);
 	createVertexBuffer(towerVertices, towerVertexBuffer, towerVertexBufferMemory);
 	createIndexBuffer(towerIndices, towerIndexBuffer, towerIndexBufferMemory);
+
+	loadModel(DEAD_TREE_MODEL_PATH, deadTreeVertices, deadTreeIndices);
+	createVertexBuffer(deadTreeVertices, deadTreeVertexBuffer, deadTreeVertexBufferMemory);
+	createIndexBuffer(deadTreeIndices, deadTreeIndexBuffer, deadTreeIndexBufferMemory);
 
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
 	createDescriptorPool();
-	createDescriptorSets();
+	createDescriptorSets(descriptorSets, snowMountainImageView, snowMountainNormalMapImageView, textureSampler);
+	createDescriptorSets(deadTreeDescriptorSets, deadTreeImageView, deadTreeNormalMapImageView, textureSampler);
 	createSkyboxDescriptorSets();
 	createCommandBuffer();
 	createSyncObjects();
@@ -2262,22 +2291,22 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 void VulkanApplication::createDescriptorPool() {
 	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 3;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 3;
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 3;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
 	}
 }
 
-void VulkanApplication::createDescriptorSets() {
+void VulkanApplication::createDescriptorSets(std::vector<VkDescriptorSet>& descriptorSets, VkImageView textureImageView, VkImageView normalMapImageView, VkSampler textureSampler) {
 	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2358,16 +2387,18 @@ void VulkanApplication::cleanUp() {
 	vkFreeMemory(device, skyboxVertexBufferMemory, nullptr);
 
 	// Clean up the normal map
-	vkDestroyImageView(device, normalMapImageView, nullptr);
-	vkDestroyImage(device, normalMapImage, nullptr);
-	vkFreeMemory(device, normalMapImageMemory, nullptr);
+	vkDestroyImageView(device, snowMountainNormalMapImageView, nullptr);
+	vkDestroyImage(device, snowMountainNormalMapImage, nullptr);
+	vkFreeMemory(device, snowMountainNormalMapImageMemory, nullptr);
 
 	// Clean up the model and it's own texture
 	vkDestroySampler(device, textureSampler, nullptr);
-	vkDestroyImageView(device, textureImageView, nullptr);
+	vkDestroyImageView(device, snowMountainImageView, nullptr);
 
-	vkDestroyImage(device, textureImage, nullptr);
-	vkFreeMemory(device, textureImageMemory, nullptr);
+	vkDestroyImage(device, snowMountainImage, nullptr);
+	vkFreeMemory(device, snowMountainImageMemory, nullptr);
+
+
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroyBuffer(device, uniformBuffers[i], nullptr);
