@@ -1988,20 +1988,30 @@ void VulkanApplication::createSkyboxPipeline() {
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 	// Vertex input
-	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+	std::array<VkVertexInputBindingDescription, 2> bindingDescriptions = {
+		Vertex::getBindingDescription(),
+		Vertex::getInstanceBindingDescription()
+	};
 	
-	VkVertexInputAttributeDescription attributeDescription{};
-	attributeDescription.binding = 0;
-	attributeDescription.location = 0;
-	attributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescription.offset = offsetof(Vertex, pos);
+	auto vertexAttrib = Vertex::getAttributeDescriptions();
+	auto instanceAttrib = Vertex::getInstanceAttributeDescriptions();
+
+	std::array<VkVertexInputAttributeDescription, 10> attributeDescriptions;
+
+	for (int i = 0; i < 6; i++) {
+		attributeDescriptions[i] = vertexAttrib[i];
+	}
+
+	for (int i = 0; i < 4; i++) {
+		attributeDescriptions[6 + i] = instanceAttrib[i];
+	}
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = &attributeDescription;
+	vertexInputInfo.vertexBindingDescriptionCount = 2;
+	vertexInputInfo.vertexAttributeDescriptionCount = 10;
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	// Input assembly
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -2118,6 +2128,35 @@ void VulkanApplication::createSkyboxPipeline() {
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
+void VulkanApplication::createDeadTreeInstanceBuffer() {
+	glm::mat4 deadTreeScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+
+	deadTreeInstances.resize(5);
+	deadTreeInstances[0].model = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -10.0f, 40.0f)) * deadTreeScale;
+	deadTreeInstances[1].model = glm::translate(glm::mat4(1.0f), glm::vec3(40.0f, -10.0f, 1.0f)) * deadTreeScale;
+	deadTreeInstances[2].model = glm::translate(glm::mat4(1.0f), glm::vec3(-40.0f, -10.0f, 1.0f))* deadTreeScale;
+	deadTreeInstances[3].model = glm::translate(glm::mat4(1.0f), glm::vec3(-40.0f, -10.0f, 40.0f)) * deadTreeScale;
+	deadTreeInstances[4].model = glm::translate(glm::mat4(1.0f), glm::vec3(40.0f, -10.0f, 40.0f)) * deadTreeScale;
+
+	VkDeviceSize bufferSize = sizeof(deadTreeInstances[0]) * deadTreeInstances.size();
+
+	VkBuffer stagingBuffer = NULL;
+	VkDeviceMemory stagingBufferMemory = NULL;
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, deadTreeInstances.data(), (size_t)bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, deadTreeInstanceBuffer, deadTreeInstanceBufferMemory);
+
+	copyBuffer(stagingBuffer, deadTreeInstanceBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
 void VulkanApplication::initVulkan() {
 	createInstance();
 	createSurface();
@@ -2161,6 +2200,7 @@ void VulkanApplication::initVulkan() {
 	loadModel(DEAD_TREE_MODEL_PATH, deadTreeVertices, deadTreeIndices);
 	createVertexBuffer(deadTreeVertices, deadTreeVertexBuffer, deadTreeVertexBufferMemory);
 	createIndexBuffer(deadTreeIndices, deadTreeIndexBuffer, deadTreeIndexBufferMemory);
+	createDeadTreeInstanceBuffer();
 
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
