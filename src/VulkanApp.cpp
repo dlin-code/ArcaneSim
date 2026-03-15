@@ -635,8 +635,8 @@ void VulkanApplication::createRenderPass() {
 void VulkanApplication::createGraphicsPipeline() {
 	// Loads SPIR-V shader binaries into memory using "readFile" utility.
 	// "vertShaderCode" and "fragShaderCode" contain raw shade bytecode (in std::vector<char>).
-	auto vertShaderCode = readFile("shaders/vert.spv");
-	auto fragShaderCode = readFile("shaders/frag.spv");
+	auto vertShaderCode = readFile("shaders/shader_vert.spv");
+	auto fragShaderCode = readFile("shaders/shader_frag.spv");
 
 	std::cout << "Program read - vertShaderCode size: " << vertShaderCode.size() << std::endl;
 	std::cout << "Program read - fragShaderCode size: " << fragShaderCode.size() << std::endl;
@@ -2155,6 +2155,19 @@ void VulkanApplication::createDeadTreeInstanceBuffer() {
 
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+void VulkanApplication::createInstancedPipeline() {
+	auto vertShaderCode = readFile("shaders/instance_shader_vert.spv");
+	auto fragShaderCode = readFile("shaders/shader_frag.spv");
+
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+
 }
 
 void VulkanApplication::initVulkan() {
