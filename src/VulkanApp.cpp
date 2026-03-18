@@ -1027,19 +1027,15 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	);
 
 	// Rendering the dead tree
-	PushConstants deadTreePushConstants{};
-	glm::mat4 deadTreeScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
-	glm::mat4 deadTreeTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -10.0f, -40.0f));
-	deadTreePushConstants.model = deadTreeTranslation * deadTreeScale;
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, instancedPipeline);
 
-	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &deadTreePushConstants);
-
-	VkBuffer deadTreeVertexBuffers[] = { deadTreeVertexBuffer };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, deadTreeVertexBuffers, offsets);
+	VkBuffer deadTreeBuffers[] = { deadTreeVertexBuffer, deadTreeInstanceBuffer };
+	VkDeviceSize twoOffsets[] = { 0, 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 2, deadTreeBuffers, twoOffsets);
 	vkCmdBindIndexBuffer(commandBuffer, deadTreeIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &deadTreeDescriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, instancedPipelineLayout, 0, 1, &deadTreeDescriptorSets[currentFrame], 0, nullptr);
 	
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 5, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1993,23 +1989,13 @@ void VulkanApplication::createSkyboxPipeline() {
 		Vertex::getInstanceBindingDescription()
 	};
 	
-	auto vertexAttrib = Vertex::getAttributeDescriptions();
-	auto instanceAttrib = Vertex::getInstanceAttributeDescriptions();
-
-	std::array<VkVertexInputAttributeDescription, 10> attributeDescriptions;
-
-	for (int i = 0; i < 6; i++) {
-		attributeDescriptions[i] = vertexAttrib[i];
-	}
-
-	for (int i = 0; i < 4; i++) {
-		attributeDescriptions[6 + i] = instanceAttrib[i];
-	}
+	auto bindingDescription = Vertex::getAttributeDescriptions();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 2;
-	vertexInputInfo.vertexAttributeDescriptionCount = 10;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
@@ -2188,14 +2174,29 @@ void VulkanApplication::createInstancedPipeline() {
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
 	dynamicState.pDynamicStates = dynamicStates.data();
 
-	auto bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+	std::array<VkVertexInputBindingDescription, 2> bindingDescriptions = {
+		Vertex::getBindingDescription(),
+		Vertex::getInstanceBindingDescription()
+	};
+
+	auto vertexAttrib = Vertex::getAttributeDescriptions();
+	auto instanceAttrib = Vertex::getInstanceAttributeDescriptions();
+
+	std::array<VkVertexInputAttributeDescription, 10> attributeDescriptions;
+
+	for (int i = 0; i < 6; i++) {
+		attributeDescriptions[i] = vertexAttrib[i];
+	}
+
+	for (int i = 0; i < 4; i++) {
+		attributeDescriptions[6 + i] = instanceAttrib[i];
+	}
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexBindingDescriptionCount = 2;
+	vertexInputInfo.vertexAttributeDescriptionCount = 10;
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -2284,13 +2285,39 @@ void VulkanApplication::createInstancedPipeline() {
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &instancedPipelineLayout) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create pipeline layout!");
 	}
 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencilState;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.layout = instancedPipelineLayout;
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
 
+	VkDebugUtilsMessengerCallbackDataEXT* callbackData = nullptr;
+
+	VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &instancedPipeline);
+
+	if (result != VK_SUCCESS) {
+		std::cerr << "vkCreateInstanceGraphicsPipelines failed! Error code: " << result << std::endl;
+		throw std::runtime_error("failed to create graphics pipeline!");
+	}
+
+	vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
 void VulkanApplication::initVulkan() {
@@ -2307,6 +2334,7 @@ void VulkanApplication::initVulkan() {
 
 	createGraphicsPipeline();
 	createSkyboxPipeline();
+	createInstancedPipeline();
 	createDepthResources();
 	createFramebuffers();
 	createCommandPool();
