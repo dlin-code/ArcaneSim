@@ -32,16 +32,20 @@ endif()
 set(GLSL_SHADERS
   ${SHADER_DIR}/shader.vert
   ${SHADER_DIR}/shader.frag
+  ${SHADER_DIR}/skybox.vert
+  ${SHADER_DIR}/skybox.frag
+  ${SHADER_DIR}/instance_shader.vert
 )
 
 set(SPV_SHADERS "")
 foreach(GLSL ${GLSL_SHADERS})
+  get_filename_component(FNAME ${GLSL} NAME_WE)
   get_filename_component(EXT ${GLSL} EXT)
 
   if(EXT STREQUAL ".vert")
-    set(SPV ${SHADER_OUT_DIR}/vert.spv)
+    set(SPV ${SHADER_OUT_DIR}/${FNAME}_vert.spv)
   elseif(EXT STREQUAL ".frag")
-    set(SPV ${SHADER_OUT_DIR}/frag.spv)
+    set(SPV ${SHADER_OUT_DIR}/${FNAME}_frag.spv)
   else()
     message(FATAL_ERROR "Unknown shader type: ${GLSL}")
   endif()

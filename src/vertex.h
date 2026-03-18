@@ -65,6 +65,41 @@ struct Vertex
 		return attributeDescriptions;
 	}
 
+	static VkVertexInputBindingDescription getInstanceBindingDescription() {
+		VkVertexInputBindingDescription instanceBindingDescription{};									// A vertex binding descibes at which rate to load data from memory throughout the vertices. It specifies the number of bytes between data entries and whether to move to the next data entry after each vertex or after each instance.
+		instanceBindingDescription.binding = 1;															// The binding parameter specifies the index of the binding in the array of bindings.
+		instanceBindingDescription.stride = sizeof(glm::mat4);												// The stride parameter specifies the number of bytes from one entry to the next.
+		instanceBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;								// In this parameter I choose to move the next data entry after each vertex.
+
+		return instanceBindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 4> getInstanceAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 4> instanceAttributeDescriptions{};
+
+		instanceAttributeDescriptions[0].binding = 1;
+		instanceAttributeDescriptions[0].location = 6;
+		instanceAttributeDescriptions[0].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		instanceAttributeDescriptions[0].offset = 0;
+
+		instanceAttributeDescriptions[1].binding = 1;
+		instanceAttributeDescriptions[1].location = 7;
+		instanceAttributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		instanceAttributeDescriptions[1].offset = sizeof(glm::vec4);
+
+		instanceAttributeDescriptions[2].binding = 1;
+		instanceAttributeDescriptions[2].location = 8;
+		instanceAttributeDescriptions[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		instanceAttributeDescriptions[2].offset = sizeof(glm::vec4) * 2;
+
+		instanceAttributeDescriptions[3].binding = 1;
+		instanceAttributeDescriptions[3].location = 9;
+		instanceAttributeDescriptions[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+		instanceAttributeDescriptions[3].offset = sizeof(glm::vec4) * 3;
+
+		return instanceAttributeDescriptions;
+	}
+
 	bool operator==(const Vertex& other) const {
 		return pos == other.pos && color == other.color 
 				&& texCoord == other.texCoord && normal == other.normal

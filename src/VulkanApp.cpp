@@ -635,8 +635,8 @@ void VulkanApplication::createRenderPass() {
 void VulkanApplication::createGraphicsPipeline() {
 	// Loads SPIR-V shader binaries into memory using "readFile" utility.
 	// "vertShaderCode" and "fragShaderCode" contain raw shade bytecode (in std::vector<char>).
-	auto vertShaderCode = readFile("shaders/vert.spv");
-	auto fragShaderCode = readFile("shaders/frag.spv");
+	auto vertShaderCode = readFile("shaders/shader_vert.spv");
+	auto fragShaderCode = readFile("shaders/shader_frag.spv");
 
 	std::cout << "Program read - vertShaderCode size: " << vertShaderCode.size() << std::endl;
 	std::cout << "Program read - fragShaderCode size: " << fragShaderCode.size() << std::endl;
@@ -1027,19 +1027,15 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	);
 
 	// Rendering the dead tree
-	PushConstants deadTreePushConstants{};
-	glm::mat4 deadTreeScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
-	glm::mat4 deadTreeTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -10.0f, -40.0f));
-	deadTreePushConstants.model = deadTreeTranslation * deadTreeScale;
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, instancedPipeline);
 
-	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &deadTreePushConstants);
-
-	VkBuffer deadTreeVertexBuffers[] = { deadTreeVertexBuffer };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, deadTreeVertexBuffers, offsets);
+	VkBuffer deadTreeBuffers[] = { deadTreeVertexBuffer, deadTreeInstanceBuffer };
+	VkDeviceSize twoOffsets[] = { 0, 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 2, deadTreeBuffers, twoOffsets);
 	vkCmdBindIndexBuffer(commandBuffer, deadTreeIndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &deadTreeDescriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, instancedPipelineLayout, 0, 1, &deadTreeDescriptorSets[currentFrame], 0, nullptr);
 	
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 5, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1988,20 +1984,20 @@ void VulkanApplication::createSkyboxPipeline() {
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 	// Vertex input
-	VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+	std::array<VkVertexInputBindingDescription, 2> bindingDescriptions = {
+		Vertex::getBindingDescription(),
+		Vertex::getInstanceBindingDescription()
+	};
 	
-	VkVertexInputAttributeDescription attributeDescription{};
-	attributeDescription.binding = 0;
-	attributeDescription.location = 0;
-	attributeDescription.format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescription.offset = offsetof(Vertex, pos);
+	auto bindingDescription = Vertex::getAttributeDescriptions();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = &attributeDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	// Input assembly
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -2118,6 +2114,212 @@ void VulkanApplication::createSkyboxPipeline() {
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
+void VulkanApplication::createDeadTreeInstanceBuffer() {
+	glm::mat4 deadTreeScale = glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
+
+	deadTreeInstances.resize(5);
+	deadTreeInstances[0].model = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, -10.0f, 40.0f)) * deadTreeScale;
+	deadTreeInstances[1].model = glm::translate(glm::mat4(1.0f), glm::vec3(40.0f, -10.0f, 1.0f)) * deadTreeScale;
+	deadTreeInstances[2].model = glm::translate(glm::mat4(1.0f), glm::vec3(-40.0f, -10.0f, 1.0f))* deadTreeScale;
+	deadTreeInstances[3].model = glm::translate(glm::mat4(1.0f), glm::vec3(-40.0f, -10.0f, 40.0f)) * deadTreeScale;
+	deadTreeInstances[4].model = glm::translate(glm::mat4(1.0f), glm::vec3(40.0f, -10.0f, 40.0f)) * deadTreeScale;
+
+	VkDeviceSize bufferSize = sizeof(deadTreeInstances[0]) * deadTreeInstances.size();
+
+	VkBuffer stagingBuffer = NULL;
+	VkDeviceMemory stagingBufferMemory = NULL;
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, deadTreeInstances.data(), (size_t)bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, deadTreeInstanceBuffer, deadTreeInstanceBufferMemory);
+
+	copyBuffer(stagingBuffer, deadTreeInstanceBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+void VulkanApplication::createInstancedPipeline() {
+	auto vertShaderCode = readFile("shaders/instance_shader_vert.spv");
+	auto fragShaderCode = readFile("shaders/shader_frag.spv");
+
+	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertShaderModule;
+	vertShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragShaderModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+	std::vector<VkDynamicState> dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicState.pDynamicStates = dynamicStates.data();
+
+	std::array<VkVertexInputBindingDescription, 2> bindingDescriptions = {
+		Vertex::getBindingDescription(),
+		Vertex::getInstanceBindingDescription()
+	};
+
+	auto vertexAttrib = Vertex::getAttributeDescriptions();
+	auto instanceAttrib = Vertex::getInstanceAttributeDescriptions();
+
+	std::array<VkVertexInputAttributeDescription, 10> attributeDescriptions;
+
+	for (int i = 0; i < 6; i++) {
+		attributeDescriptions[i] = vertexAttrib[i];
+	}
+
+	for (int i = 0; i < 4; i++) {
+		attributeDescriptions[6 + i] = instanceAttrib[i];
+	}
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 2;
+	vertexInputInfo.vertexAttributeDescriptionCount = 10;
+	vertexInputInfo.pVertexBindingDescriptions = bindingDescriptions.data();
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+	VkViewport viewport;
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)swapChainExtent.width;
+	viewport.height = (float)swapChainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapChainExtent;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+	
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.0f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilState{};
+	depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencilState.depthTestEnable = VK_TRUE;
+	depthStencilState.depthWriteEnable = VK_TRUE;
+	depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencilState.depthBoundsTestEnable = VK_FALSE;
+	depthStencilState.minDepthBounds = 0.0f;
+	depthStencilState.maxDepthBounds = 1.0f;
+	depthStencilState.stencilTestEnable = VK_FALSE;
+	depthStencilState.front = {};
+	depthStencilState.back = {};
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_FALSE;
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.blendEnable = false;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.blendConstants[0] = 0.0f;
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &instancedPipelineLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create pipeline layout!");
+	}
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencilState;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.layout = instancedPipelineLayout;
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+	VkDebugUtilsMessengerCallbackDataEXT* callbackData = nullptr;
+
+	VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &instancedPipeline);
+
+	if (result != VK_SUCCESS) {
+		std::cerr << "vkCreateInstanceGraphicsPipelines failed! Error code: " << result << std::endl;
+		throw std::runtime_error("failed to create graphics pipeline!");
+	}
+
+	vkDestroyShaderModule(device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(device, vertShaderModule, nullptr);
+}
+
 void VulkanApplication::initVulkan() {
 	createInstance();
 	createSurface();
@@ -2132,6 +2334,7 @@ void VulkanApplication::initVulkan() {
 
 	createGraphicsPipeline();
 	createSkyboxPipeline();
+	createInstancedPipeline();
 	createDepthResources();
 	createFramebuffers();
 	createCommandPool();
@@ -2161,6 +2364,7 @@ void VulkanApplication::initVulkan() {
 	loadModel(DEAD_TREE_MODEL_PATH, deadTreeVertices, deadTreeIndices);
 	createVertexBuffer(deadTreeVertices, deadTreeVertexBuffer, deadTreeVertexBufferMemory);
 	createIndexBuffer(deadTreeIndices, deadTreeIndexBuffer, deadTreeIndexBufferMemory);
+	createDeadTreeInstanceBuffer();
 
 	createSkyboxVertexBuffer();
 	createUniformBuffers();

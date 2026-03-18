@@ -49,6 +49,10 @@ struct PushConstants {
 	glm::mat4 model;
 };
 
+struct InstanceData {
+	glm::mat4 model;
+};
+
 class VulkanApplication
 {
 private:
@@ -260,6 +264,14 @@ private:
 
 	std::vector<VkDescriptorSet> deadTreeDescriptorSets;
 
+	// Dead tree instancing
+	std::vector<InstanceData> deadTreeInstances;
+	VkBuffer deadTreeInstanceBuffer;
+	VkDeviceMemory deadTreeInstanceBufferMemory;
+
+	VkPipeline instancedPipeline;
+	VkPipelineLayout instancedPipelineLayout;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -342,6 +354,9 @@ public:
 	void createSkyboxDescriptorSetLayout();
 	void createSkyboxDescriptorSets();
 	void createSkyboxPipeline();
+	
+	void createDeadTreeInstanceBuffer();
+	void createInstancedPipeline();
 
 	void cleanUp();
 };
