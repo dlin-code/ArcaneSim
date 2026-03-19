@@ -15,6 +15,7 @@
 
 #include "vertex.h"
 #include "camera.h"
+#include "particle.h"
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -272,6 +273,9 @@ private:
 	VkPipeline instancedPipeline;
 	VkPipelineLayout instancedPipelineLayout;
 
+	std::vector<Particle> particles;
+	float MAX_PARTICLES = 500.f;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -357,6 +361,9 @@ public:
 	
 	void createDeadTreeInstanceBuffer();
 	void createInstancedPipeline();
+
+	void initParticles();
+	void updateParticles(float deltaTime);
 
 	void cleanUp();
 };

@@ -63,7 +63,7 @@ endforeach()
 add_custom_target(ShadersTarget DEPENDS ${SPV_SHADERS})
 
 # Create executable
-add_executable(ArcaneSim ${SRC_FILES} "src/VulkanApp.cpp" "src/VulkanApp.h" "src/camera.cpp" "src/camera.h" )
+add_executable(ArcaneSim ${SRC_FILES} "src/VulkanApp.cpp" "src/VulkanApp.h" "src/camera.cpp" "src/camera.h"  "src/particle.h")
 
 add_dependencies(ArcaneSim ShadersTarget)
 

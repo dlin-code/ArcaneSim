@@ -2320,6 +2320,27 @@ void VulkanApplication::createInstancedPipeline() {
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 }
 
+void VulkanApplication::initParticles() {
+	particles.resize(MAX_PARTICLES);
+
+	for (int i = 0; i < particles.size(); i++) {
+		particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f, 
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f 
+		};
+		particles[i].velocity = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f, 
+								  -1.0f,
+								  static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f};
+	}
+}
+
+void VulkanApplication::updateParticles(float deltaTime) {
+	for (int i = 0; i < particles.size(); i++ ) {
+		particles[i].position += particles[i].velocity * deltaTime;
+		// particle respawn when particle's y position is around -15 to -20
+	}
+}
+
 void VulkanApplication::initVulkan() {
 	createInstance();
 	createSurface();
