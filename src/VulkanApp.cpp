@@ -2330,15 +2330,44 @@ void VulkanApplication::initParticles() {
 		};
 		particles[i].velocity = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f, 
 								  -1.0f,
-								  static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f};
+								  static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f
+		};
 	}
 }
 
 void VulkanApplication::updateParticles(float deltaTime) {
 	for (int i = 0; i < particles.size(); i++ ) {
 		particles[i].position += particles[i].velocity * deltaTime;
-		// particle respawn when particle's y position is around -15 to -20
+		
+		if (particles[i].position.y < -15.0f) {
+			particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f,
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f
+			};
+		}
 	}
+}
+
+void VulkanApplication::createParticleVertexBuffers() {
+	VkDeviceSize bufferSize = sizeof(glm::vec3) * MAX_PARTICLES;
+
+	particleVertexBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	particleVertexBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	particleVertexBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, particleVertexBuffers[i], particleVertexBuffersMemory[i]);
+
+		vkMapMemory(device, particleVertexBuffersMemory[i], 0, bufferSize, 0, &particleVertexBuffersMapped[i]);
+	}
+}
+
+void VulkanApplication::updateParticleVertexBuffer(uint32_t currentFrame) {
+	std::vector<glm::vec3> positions(particles.size());
+	for (int i = 0; i < particles.size(); i++) {
+		positions[i] = particles[i].position;
+	}
+	memcpy(particleVertexBuffersMapped[currentFrame], positions.data(), sizeof(glm::vec3) * particles.size());
 }
 
 void VulkanApplication::initVulkan() {
@@ -2389,6 +2418,8 @@ void VulkanApplication::initVulkan() {
 
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
+	initParticles();
+	createParticleVertexBuffers();
 	createDescriptorPool();
 	createDescriptorSets(descriptorSets, snowMountainImageView, snowMountainNormalMapImageView, textureSampler);
 	createDescriptorSets(deadTreeDescriptorSets, deadTreeImageView, deadTreeNormalMapImageView, textureSampler);
@@ -2420,7 +2451,10 @@ void VulkanApplication::drawFrame() {
 	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
 
 	uint32_t imageIndex;
-	//vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	
+	static auto lastTime = std::chrono::high_resolution_clock::now();
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
 
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
@@ -2433,6 +2467,8 @@ void VulkanApplication::drawFrame() {
 	}
 
 	updateUniformBuffer(currentFrame);
+	updateParticles(deltaTime);
+	updateParticleVertexBuffer(currentFrame);
 
 	// Only reset the fence if we are submitting work.
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
