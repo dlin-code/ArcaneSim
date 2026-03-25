@@ -274,12 +274,16 @@ private:
 	VkPipelineLayout instancedPipelineLayout;
 
 	// Particles
-	std::vector<Particle> particles;
 	const int MAX_PARTICLES = 500;
+	VkDescriptorSetLayout particleDescriptorSetLayout;
+	VkPipelineLayout particlePipelineLayout;
+	VkPipeline particlePipeline;
 
+	std::vector<Particle> particles;
 	std::vector<VkBuffer> particleVertexBuffers;
 	std::vector<VkDeviceMemory> particleVertexBuffersMemory;
 	std::vector<void*> particleVertexBuffersMapped;
+	std::vector<VkDescriptorSet> particleDescriptorSets;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -372,6 +376,8 @@ public:
 
 	void createParticleVertexBuffers();
 	void updateParticleVertexBuffer(uint32_t currentImage);
+
+	void createParticlesPipeline();
 
 	void cleanUp();
 };

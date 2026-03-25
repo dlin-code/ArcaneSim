@@ -35,6 +35,8 @@ set(GLSL_SHADERS
   ${SHADER_DIR}/skybox.vert
   ${SHADER_DIR}/skybox.frag
   ${SHADER_DIR}/instance_shader.vert
+  ${SHADER_DIR}/particle.vert
+  ${SHADER_DIR}/particle.frag
 )
 
 set(SPV_SHADERS "")
