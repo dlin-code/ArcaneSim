@@ -379,5 +379,8 @@ public:
 
 	void createParticlesPipeline();
 
+	void createParticleDescriptorSetLayout();
+	void createParticleDescriptorSets();
+
 	void cleanUp();
 };
