@@ -1037,6 +1037,14 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	
 	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(deadTreeIndices.size()), 5, 0, 0, 0);
 
+	// Rendering the snow particles
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipeline);
+
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &particleVertexBuffers[currentFrame], offsets);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout, 0, 1, &particleDescriptorSets[currentFrame], 0, nullptr);
+
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(particles.size()), 1, 0, 0);
+
 	vkCmdEndRenderPass(commandBuffer);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -2864,6 +2872,17 @@ void VulkanApplication::cleanUp() {
 	vkDestroyBuffer(device, skyboxVertexBuffer, nullptr);
 	vkFreeMemory(device, skyboxVertexBufferMemory, nullptr);
 
+	// Clean up the particles
+	vkDestroyPipeline(device, particlePipeline, nullptr);
+	vkDestroyPipelineLayout(device, particlePipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(device, particleDescriptorSetLayout, nullptr);
+	
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+	{
+		vkDestroyBuffer(device, particleVertexBuffers[i], nullptr);
+		vkFreeMemory(device, particleVertexBuffersMemory[i], nullptr);
+	}
+
 	// Clean up the normal map
 	vkDestroyImageView(device, snowMountainNormalMapImageView, nullptr);
 	vkDestroyImage(device, snowMountainNormalMapImage, nullptr);
@@ -2906,9 +2925,6 @@ void VulkanApplication::cleanUp() {
 	}
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
-	
-	/*vkDestroyShaderModule(device, fragShaderModule, nullptr);
-	vkDestroyShaderModule(device, vertShaderModule, nullptr);*/
 	
 	vkDestroyDevice(device, nullptr);
 	
