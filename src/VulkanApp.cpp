@@ -2332,7 +2332,7 @@ void VulkanApplication::initParticles() {
 								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f 
 		};
 		particles[i].velocity = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f, 
-								  -1.0f,
+								  -2.0f,
 								  static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f
 		};
 	}
@@ -2680,6 +2680,7 @@ void VulkanApplication::drawFrame() {
 	static auto lastTime = std::chrono::high_resolution_clock::now();
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+	lastTime = currentTime;
 
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
