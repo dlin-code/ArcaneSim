@@ -11,5 +11,5 @@ layout(location = 0) in vec3 inPosition;
 
 void main() {
 	gl_Position = ubo.proj * ubo.view * vec4(inPosition, 1.0);
-	gl_PointSize = 3.0;
+	gl_PointSize = 6.0;
 }
