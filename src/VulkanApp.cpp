@@ -2332,7 +2332,7 @@ void VulkanApplication::initParticles() {
 								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f 
 		};
 		particles[i].velocity = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f, 
-								  -2.0f,
+								  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
 								  static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f
 		};
 	}
