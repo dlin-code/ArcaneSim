@@ -2327,9 +2327,9 @@ void VulkanApplication::initParticles() {
 	particles.resize(MAX_PARTICLES);
 
 	for (int i = 0; i < particles.size(); i++) {
-		particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
+		particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
 								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f, 
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f 
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f 
 		};
 		particles[i].velocity = { (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2, 
 								  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
@@ -2338,9 +2338,11 @@ void VulkanApplication::initParticles() {
 	}
 }
 
-void VulkanApplication::updateParticles(float deltaTime) {
+void VulkanApplication::updateParticles(float deltaTime, float time) {
 	for (int i = 0; i < particles.size(); i++ ) {
 		particles[i].position += particles[i].velocity * deltaTime;
+		particles[i].position.x += sin(time + i) * 0.05f;
+		particles[i].position.z += sin(time + i) * 0.05f;
 		
 		if (particles[i].position.y < -15.0f) {
 			particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
@@ -2682,6 +2684,9 @@ void VulkanApplication::drawFrame() {
 	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
 	lastTime = currentTime;
 
+	static float time = 0;
+	time += deltaTime;
+
 	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -2693,7 +2698,7 @@ void VulkanApplication::drawFrame() {
 	}
 
 	updateUniformBuffer(currentFrame);
-	updateParticles(deltaTime);
+	updateParticles(deltaTime, time);
 	updateParticleVertexBuffer(currentFrame);
 
 	// Only reset the fence if we are submitting work.

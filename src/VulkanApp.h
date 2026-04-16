@@ -274,7 +274,7 @@ private:
 	VkPipelineLayout instancedPipelineLayout;
 
 	// Particles
-	const int MAX_PARTICLES = 500;
+	const int MAX_PARTICLES = 1000;
 	VkDescriptorSetLayout particleDescriptorSetLayout;
 	VkPipelineLayout particlePipelineLayout;
 	VkPipeline particlePipeline;
@@ -372,7 +372,7 @@ public:
 	void createInstancedPipeline();
 
 	void initParticles();
-	void updateParticles(float deltaTime);
+	void updateParticles(float deltaTime, float time);
 
 	void createParticleVertexBuffers();
 	void updateParticleVertexBuffer(uint32_t currentImage);
