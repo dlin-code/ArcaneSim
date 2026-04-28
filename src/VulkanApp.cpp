@@ -173,8 +173,8 @@ QueueFamilyIndices VulkanApplication::findQueueFamilies(VkPhysicalDevice physica
 	int i = 0;
 	for (const auto& queueFamily : queueFamilies) {
 		// Check for graphics capability
-		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-			indices.graphicsFamily = i;
+		if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+			indices.graphicsAndComputeFamily = i;
 		}
 
 		// Check for present support
@@ -316,7 +316,7 @@ void VulkanApplication::createLogicalDevice() {
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+	std::set<uint32_t> uniqueQueueFamilies = { indices.graphicsAndComputeFamily.value(), indices.presentFamily.value() };
 
 	float queuePriority = 1.0f;
 
@@ -362,7 +362,7 @@ void VulkanApplication::createLogicalDevice() {
 		throw std::runtime_error("failed to create logical device!");
 	}
 
-	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+	vkGetDeviceQueue(device, indices.graphicsAndComputeFamily.value(), 0, &computeQueue);
 	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
 
@@ -436,9 +436,9 @@ void VulkanApplication::createSwapChain(/*GLFWwindow* window*/) {
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
-	uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+	uint32_t queueFamilyIndices[] = { indices.graphicsAndComputeFamily.value(), indices.presentFamily.value() };
 
-	if (indices.graphicsFamily != indices.presentFamily) {
+	if (indices.graphicsAndComputeFamily != indices.presentFamily) {
 		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
 		createInfo.queueFamilyIndexCount = 2;
 		createInfo.pQueueFamilyIndices = queueFamilyIndices;
@@ -906,7 +906,7 @@ void VulkanApplication::createCommandPool() {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsAndComputeFamily.value();
 
 	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create command pool!");
@@ -1040,8 +1040,8 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	// Rendering the snow particles
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipeline);
 
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &particleVertexBuffers[currentFrame], offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout, 0, 1, &particleDescriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &shaderStorageBuffers[currentFrame], offsets);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, nullptr);
 
 	vkCmdDraw(commandBuffer, static_cast<uint32_t>(particles.size()), 1, 0, 0);
 
@@ -1193,8 +1193,8 @@ void VulkanApplication::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(graphicsQueue);
+	vkQueueSubmit(computeQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(computeQueue);
 
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
@@ -2353,21 +2353,34 @@ void VulkanApplication::updateParticles(float deltaTime, float time) {
 	}
 }
 
-void VulkanApplication::createParticleVertexBuffers() {
-	VkDeviceSize bufferSize = sizeof(glm::vec3) * MAX_PARTICLES;
+void VulkanApplication::createShaderStorageBuffers() {
+	shaderStorageBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	shaderStorageBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
-	particleVertexBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	particleVertexBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-	particleVertexBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+	initParticles();
+
+	VkDeviceSize bufferSize = sizeof(Particle) * MAX_PARTICLES;
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, particles.data(), (size_t)bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, particleVertexBuffers[i], particleVertexBuffersMemory[i]);
-
-		vkMapMemory(device, particleVertexBuffersMemory[i], 0, bufferSize, 0, &particleVertexBuffersMapped[i]);
+		createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shaderStorageBuffers[i], shaderStorageBuffersMemory[i]);
+		// Copy data from the staging buffer (host) to the shader storage buffer (GPU)
+		copyBuffer(stagingBuffer, shaderStorageBuffers[i], bufferSize);
 	}
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void VulkanApplication::updateParticleVertexBuffer(uint32_t currentFrame) {
+void VulkanApplication::updateShaderStorageBuffers(uint32_t currentFrame) {
 	std::vector<glm::vec3> positions(particles.size());
 	for (int i = 0; i < particles.size(); i++) {
 		positions[i] = particles[i].position;
@@ -2384,7 +2397,7 @@ void VulkanApplication::createParticlesPipeline() {
 
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	vertShaderStageInfo.module = vertShaderModule;
 	vertShaderStageInfo.pName = "main";
 
@@ -2545,17 +2558,29 @@ void VulkanApplication::createParticlesPipeline() {
 }
 
 void VulkanApplication::createParticleDescriptorSetLayout() {
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;
+	std::array<VkDescriptorSetLayoutBinding, 3> uboLayoutBindings{};
+	uboLayoutBindings[0].binding = 0;
+	uboLayoutBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBindings[0].descriptorCount = 1;
+	uboLayoutBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	uboLayoutBindings[0].pImmutableSamplers = nullptr;
+
+	uboLayoutBindings[1].binding = 1;
+	uboLayoutBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	uboLayoutBindings[1].descriptorCount = 1;
+	uboLayoutBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	uboLayoutBindings[1].pImmutableSamplers = nullptr;
+
+	uboLayoutBindings[2].binding = 2;
+	uboLayoutBindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	uboLayoutBindings[2].descriptorCount = 1;
+	uboLayoutBindings[2].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	uboLayoutBindings[2].pImmutableSamplers = nullptr;
 
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &uboLayoutBinding;
+	layoutInfo.bindingCount = 3;
+	layoutInfo.pBindings = uboLayoutBindings.data();
 
 	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &particleDescriptorSetLayout) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor set layout!");
@@ -2570,27 +2595,53 @@ void VulkanApplication::createParticleDescriptorSets() {
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 	allocInfo.pSetLayouts = layouts.data();
 
-	particleDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	if (vkAllocateDescriptorSets(device, &allocInfo, particleDescriptorSets.data()) != VK_SUCCESS) {
+	computeDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	if (vkAllocateDescriptorSets(device, &allocInfo, computeDescriptorSets.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate descriptor sets!");
 	}
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[i];
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
+		VkDescriptorBufferInfo uniformBufferInfo{};
+		uniformBufferInfo.buffer = uniformBuffers[i];
+		uniformBufferInfo.offset = 0;
+		uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-		VkWriteDescriptorSet descriptorWrite{};
-		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrite.dstSet = particleDescriptorSets[i];
-		descriptorWrite.dstBinding = 0;
-		descriptorWrite.dstArrayElement = 0;
-		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrite.descriptorCount = 1;
-		descriptorWrite.pBufferInfo = &bufferInfo;
+		std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[0].dstSet = computeDescriptorSets[i];
+		descriptorWrites[0].dstBinding = 0;
+		descriptorWrites[0].dstArrayElement = 0;
+		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[0].descriptorCount = 1;
+		descriptorWrites[0].pBufferInfo = &uniformBufferInfo;
 
-		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+		VkDescriptorBufferInfo storageBufferInfoLastFrame{};
+		storageBufferInfoLastFrame.buffer = shaderStorageBuffers[(i - 1) % MAX_FRAMES_IN_FLIGHT];
+		storageBufferInfoLastFrame.offset = 0;
+		storageBufferInfoLastFrame.range = sizeof(Particle) * MAX_PARTICLES;
+
+		descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[1].dstSet = computeDescriptorSets[i];
+		descriptorWrites[1].dstBinding = 1;
+		descriptorWrites[1].dstArrayElement = 0;
+		descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrites[1].descriptorCount = 1;
+		descriptorWrites[1].pBufferInfo = &storageBufferInfoLastFrame;
+
+		VkDescriptorBufferInfo storageBufferInfoCurrentFrame{};
+		storageBufferInfoCurrentFrame.buffer = shaderStorageBuffers[i];
+		storageBufferInfoCurrentFrame.offset = 0;
+		storageBufferInfoCurrentFrame.range = sizeof(Particle) * MAX_PARTICLES;
+
+		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[2].dstSet = computeDescriptorSets[i];
+		descriptorWrites[2].dstBinding = 2;
+		descriptorWrites[2].dstArrayElement = 0;
+		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		descriptorWrites[2].descriptorCount = 1;
+		descriptorWrites[2].pBufferInfo = &storageBufferInfoCurrentFrame;
+
+		vkUpdateDescriptorSets(device, 3, descriptorWrites.data(), 0, nullptr);
 	}
 }
 
@@ -2645,7 +2696,7 @@ void VulkanApplication::initVulkan() {
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
 	initParticles();
-	createParticleVertexBuffers();
+	createShaderStorageBuffers();
 	createDescriptorPool();
 	createDescriptorSets(descriptorSets, snowMountainImageView, snowMountainNormalMapImageView, textureSampler);
 	createDescriptorSets(deadTreeDescriptorSets, deadTreeImageView, deadTreeNormalMapImageView, textureSampler);
@@ -2699,7 +2750,7 @@ void VulkanApplication::drawFrame() {
 
 	updateUniformBuffer(currentFrame);
 	updateParticles(deltaTime, time);
-	updateParticleVertexBuffer(currentFrame);
+	updateShaderStorageBuffers(currentFrame);
 
 	// Only reset the fence if we are submitting work.
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
@@ -2723,7 +2774,7 @@ void VulkanApplication::drawFrame() {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+	if (vkQueueSubmit(computeQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
 
@@ -2781,17 +2832,19 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 }
 
 void VulkanApplication::createDescriptorPool() {
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	std::array<VkDescriptorPoolSize, 3> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 4;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 3;
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 2;
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 4;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) * 6;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor pool!");
@@ -2885,8 +2938,8 @@ void VulkanApplication::cleanUp() {
 	
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 	{
-		vkDestroyBuffer(device, particleVertexBuffers[i], nullptr);
-		vkFreeMemory(device, particleVertexBuffersMemory[i], nullptr);
+		vkDestroyBuffer(device, shaderStorageBuffers[i], nullptr);
+		vkFreeMemory(device, shaderStorageBuffersMemory[i], nullptr);
 	}
 
 	// Clean up the normal map

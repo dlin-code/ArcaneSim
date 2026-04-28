@@ -25,11 +25,11 @@ const bool enableValidationLayers = true;
 
 // Holds the indices of the queue families for graphics and presentation, if found. ".isComplete()" returns true if both are set.
 struct QueueFamilyIndices {
-	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> graphicsAndComputeFamily;
 	std::optional<uint32_t> presentFamily;
 
 	bool isComplete() {
-		return graphicsFamily.has_value() && presentFamily.has_value();
+		return graphicsAndComputeFamily.has_value() && presentFamily.has_value();
 	};
 };
 
@@ -156,7 +156,7 @@ private:
 	VkSurfaceKHR surface;
 	VkDevice device;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;								// Start with no device selected.
-	VkQueue graphicsQueue;
+	VkQueue computeQueue;
 	VkQueue presentQueue;
 	VkSwapchainKHR swapChain;
 
@@ -280,10 +280,10 @@ private:
 	VkPipeline particlePipeline;
 
 	std::vector<Particle> particles;
-	std::vector<VkBuffer> particleVertexBuffers;
-	std::vector<VkDeviceMemory> particleVertexBuffersMemory;
+	std::vector<VkBuffer> shaderStorageBuffers;
+	std::vector<VkDeviceMemory> shaderStorageBuffersMemory;
 	std::vector<void*> particleVertexBuffersMapped;
-	std::vector<VkDescriptorSet> particleDescriptorSets;
+	std::vector<VkDescriptorSet> computeDescriptorSets;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -374,8 +374,8 @@ public:
 	void initParticles();
 	void updateParticles(float deltaTime, float time);
 
-	void createParticleVertexBuffers();
-	void updateParticleVertexBuffer(uint32_t currentImage);
+	void createShaderStorageBuffers();
+	void updateShaderStorageBuffers(uint32_t currentImage);
 
 	void createParticlesPipeline();
 
