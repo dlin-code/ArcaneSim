@@ -1,0 +1,40 @@
+#version 450
+
+layout (binding = 0) uniform ParameterUBO {
+	float deltaTime;
+	float time;
+} ubo;
+
+struct Particle {
+	vec3 position;
+	vec3 velocity;
+	float lifeTime;
+};
+
+layout(std140, binding = 1) readonly buffer ParticleSSBOIn {
+	Particle particlesIn[ ];
+};
+
+layout(std140, binding = 2) buffer ParticleSSBOOut {
+	Particle particlesOut[ ];
+};
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main()
+{
+	uint index = gl_GlobalInvocationID.x;
+	Particle particleIn = particlesIn[index];
+
+	particlesOut[index].position = particleIn.position + particleIn.velocity * ubo.deltaTime;
+
+	particlesOut[index].position.x += sin(ubo.time + float(index)) * 0.05f;
+	particlesOut[index].position.z += sin(ubo.time + float(index)) * 0.05f;
+
+	particlesOut[index].velocity = particleIn.velocity;
+	particlesOut[index].lifeTime = particleIn.lifeTime;
+
+	if (particlesOut[index].position.y < -15.0f){
+		particlesOut[index].position = vec3(float(index) * 0.1 - 50.0, 20.0, float(index) * 0.13 - 50.0);
+	}
+}

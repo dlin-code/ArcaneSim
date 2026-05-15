@@ -283,7 +283,13 @@ private:
 	std::vector<VkBuffer> shaderStorageBuffers;
 	std::vector<VkDeviceMemory> shaderStorageBuffersMemory;
 	std::vector<void*> particleVertexBuffersMapped;
+	std::vector<VkDescriptorSet> particleDescriptorSets;
+
+	VkDescriptorSetLayout computeDescriptorSetLayout;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
+
+	VkPipelineLayout computePipelineLayout;
+	VkPipeline computePipeline;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -381,6 +387,11 @@ public:
 
 	void createParticleDescriptorSetLayout();
 	void createParticleDescriptorSets();
+
+	void createComputeDescriptorSetLayout();
+	void createComputeDescriptorSets();
+
+	void createComputePipeline();
 
 	void cleanUp();
 };
