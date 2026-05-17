@@ -37,6 +37,7 @@ set(GLSL_SHADERS
   ${SHADER_DIR}/instance_shader.vert
   ${SHADER_DIR}/particle.vert
   ${SHADER_DIR}/particle.frag
+  ${SHADER_DIR}/particle.comp
 )
 
 set(SPV_SHADERS "")
@@ -48,6 +49,8 @@ foreach(GLSL ${GLSL_SHADERS})
     set(SPV ${SHADER_OUT_DIR}/${FNAME}_vert.spv)
   elseif(EXT STREQUAL ".frag")
     set(SPV ${SHADER_OUT_DIR}/${FNAME}_frag.spv)
+  elseif(EXT STREQUAL ".comp")
+    set(SPV ${SHADER_OUT_DIR}/${FNAME}_comp.spv)
   else()
     message(FATAL_ERROR "Unknown shader type: ${GLSL}")
   endif()

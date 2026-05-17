@@ -983,8 +983,13 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	// Compute dispatch
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
 
+	vkCmdDispatch(commandBuffer, MAX_PARTICLES / 256, 1, 1);
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport viewport{};
 	viewport.x = 0.0f;
@@ -2738,11 +2743,13 @@ void VulkanApplication::initVulkan() {
 	createDescriptorSetLayout();
 	createParticleDescriptorSetLayout();
 	createSkyboxDescriptorSetLayout();
+	createComputeDescriptorSetLayout();
 
 	createGraphicsPipeline();
 	createParticlesPipeline();
 	createSkyboxPipeline();
 	createInstancedPipeline();
+	createComputePipeline();
 	createDepthResources();
 	createFramebuffers();
 	createCommandPool();
@@ -2783,6 +2790,7 @@ void VulkanApplication::initVulkan() {
 	createDescriptorSets(deadTreeDescriptorSets, deadTreeImageView, deadTreeNormalMapImageView, textureSampler);
 	createParticleDescriptorSets();
 	createSkyboxDescriptorSets();
+	createComputeDescriptorSets();
 	createCommandBuffer();
 	createSyncObjects();
 
@@ -2830,8 +2838,8 @@ void VulkanApplication::drawFrame() {
 	}
 
 	updateUniformBuffer(currentFrame);
-	updateParticles(deltaTime, time);
-	updateShaderStorageBuffers(currentFrame);
+	//updateParticles(deltaTime, time);
+	//updateShaderStorageBuffers(currentFrame);
 
 	// Only reset the fence if we are submitting work.
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);

@@ -291,6 +291,8 @@ private:
 	VkPipelineLayout computePipelineLayout;
 	VkPipeline computePipeline;
 
+	VkCommandBuffer computeCommandBuffer;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
