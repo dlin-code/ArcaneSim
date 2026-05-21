@@ -987,7 +987,14 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
 
-	vkCmdDispatch(commandBuffer, MAX_PARTICLES / 256, 1, 1);
+	vkCmdDispatch(commandBuffer, MAX_PARTICLES / 256 + 1, 1, 1);
+
+	VkMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+
+	vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1076,8 +1083,9 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	// Rendering the snow particles
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipeline);
 
+	int prevFrame = (currentFrame - 1 + MAX_FRAMES_IN_FLIGHT) % MAX_FRAMES_IN_FLIGHT;
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &shaderStorageBuffers[currentFrame], offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, particlePipelineLayout, 0, 1, &particleDescriptorSets[currentFrame], 0, nullptr);
 
 	vkCmdDraw(commandBuffer, static_cast<uint32_t>(particles.size()), 1, 0, 0);
 
@@ -1311,6 +1319,20 @@ void VulkanApplication::createUniformBuffers() {
 		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
 		
 		vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+	}
+}
+
+void VulkanApplication::createComputeUniformBuffers() {
+	VkDeviceSize bufferSize = sizeof(ComputeUBO);
+
+	computeUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	computeUniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	computeUniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++ ) {
+		createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, computeUniformBuffers[i], computeUniformBuffersMemory[i]);
+	
+		vkMapMemory(device, computeUniformBuffersMemory[i], 0, bufferSize, 0, &computeUniformBuffersMapped[i]);
 	}
 }
 
@@ -2360,17 +2382,21 @@ void VulkanApplication::createInstancedPipeline() {
 }
 
 void VulkanApplication::initParticles() {
+	std::cout << "sizeof(Particles) = " << sizeof(Particle) << std::endl;
 	particles.resize(MAX_PARTICLES);
 
 	for (int i = 0; i < particles.size(); i++) {
-		particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
+		particles[i].position = glm::vec3(i * 2.0f - 10.f, 0.0f, 0.0f);
+			/*{static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
 								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f, 
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f 
-		};
-		particles[i].velocity = { (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2, 
-								  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
-								  (static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2
-		};
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f
+		};*/
+		//particles[i].velocity = { (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2, 
+		//						  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
+		//						  (static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2
+		//};
+		particles[i].velocity = glm::vec3(0.0f, 20.0f, 0.0f);
+		particles[i].lifeTime = 0.0f;
 	}
 }
 
@@ -2688,9 +2714,9 @@ void VulkanApplication::createComputeDescriptorSets() {
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo uniformBufferInfo{};
-		uniformBufferInfo.buffer = uniformBuffers[i];
+		uniformBufferInfo.buffer = computeUniformBuffers[i];
 		uniformBufferInfo.offset = 0;
-		uniformBufferInfo.range = sizeof(UniformBufferObject);
+		uniformBufferInfo.range = sizeof(ComputeUBO);
 
 		std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -2783,6 +2809,7 @@ void VulkanApplication::initVulkan() {
 
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
+	createComputeUniformBuffers();
 	initParticles();
 	createShaderStorageBuffers();
 	createDescriptorPool();
@@ -2838,6 +2865,7 @@ void VulkanApplication::drawFrame() {
 	}
 
 	updateUniformBuffer(currentFrame);
+	updateComputeUniformBuffer(currentFrame);
 	//updateParticles(deltaTime, time);
 	//updateShaderStorageBuffers(currentFrame);
 
@@ -2918,6 +2946,23 @@ void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
 	}
 
 	memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
+void VulkanApplication::updateComputeUniformBuffer(uint32_t currentFrame) {
+	static std::chrono::time_point<std::chrono::high_resolution_clock> startTime = std::chrono::high_resolution_clock::now();
+	static std::chrono::time_point<std::chrono::high_resolution_clock> lastTime = std::chrono::high_resolution_clock::now();
+	std::chrono::time_point<std::chrono::high_resolution_clock> currentTime = std::chrono::high_resolution_clock::now();
+
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+
+	lastTime = currentTime;
+
+	ComputeUBO ubo{};
+	ubo.deltaTime = deltaTime;
+	ubo.time = time;
+
+	memcpy(computeUniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 }
 
 void VulkanApplication::createDescriptorPool() {

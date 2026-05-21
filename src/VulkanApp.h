@@ -46,6 +46,11 @@ struct UniformBufferObject {
 	alignas(16) glm::vec3 viewPos;
 };
 
+struct ComputeUBO {
+	float deltaTime;
+	float time;
+};
+
 struct PushConstants {
 	glm::mat4 model;
 };
@@ -274,7 +279,7 @@ private:
 	VkPipelineLayout instancedPipelineLayout;
 
 	// Particles
-	const int MAX_PARTICLES = 1000;
+	const int MAX_PARTICLES = 10;
 	VkDescriptorSetLayout particleDescriptorSetLayout;
 	VkPipelineLayout particlePipelineLayout;
 	VkPipeline particlePipeline;
@@ -292,6 +297,13 @@ private:
 	VkPipeline computePipeline;
 
 	VkCommandBuffer computeCommandBuffer;
+
+	std::vector<VkBuffer> computeUniformBuffers;
+	std::vector<VkDeviceMemory> computeUniformBuffersMemory;
+	std::vector<void*> computeUniformBuffersMapped;
+
+	std::vector<VkFence> computeInFlightFences;
+	std::vector<VkSemaphore> computeFinishedSemaphores;
 
 public:
 	std::vector<VkImageView> swapChainImageViews;
@@ -384,6 +396,9 @@ public:
 
 	void createShaderStorageBuffers();
 	void updateShaderStorageBuffers(uint32_t currentImage);
+
+	void createComputeUniformBuffers();
+	void updateComputeUniformBuffer(uint32_t);
 
 	void createParticlesPipeline();
 
