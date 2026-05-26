@@ -363,6 +363,7 @@ void VulkanApplication::createLogicalDevice() {
 	}
 
 	vkGetDeviceQueue(device, indices.graphicsAndComputeFamily.value(), 0, &computeQueue);
+	vkGetDeviceQueue(device, indices.graphicsAndComputeFamily.value(), 0, &graphicsQueue);
 	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
 
@@ -947,6 +948,7 @@ void VulkanApplication::createCommandPool() {
 // Here is where the command buffer allocates.
 void VulkanApplication::createCommandBuffer() {
 	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	computeCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -954,8 +956,18 @@ void VulkanApplication::createCommandBuffer() {
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = (uint32_t) commandBuffers.size();
 
+	VkCommandBufferAllocateInfo computeAllocInfo{};
+	computeAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	computeAllocInfo.commandPool = commandPool;
+	computeAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	computeAllocInfo.commandBufferCount = (uint32_t)computeCommandBuffers.size();
+
 	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate command buffers!");
+	}
+
+	if (vkAllocateCommandBuffers(device, &computeAllocInfo, computeCommandBuffers.data()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate compute command buffers!");
 	}
 }
 
@@ -982,19 +994,6 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
-
-	// Compute dispatch
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
-
-	vkCmdDispatch(commandBuffer, MAX_PARTICLES / 256 + 1, 1, 1);
-
-	VkMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-
-	vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1096,10 +1095,33 @@ void VulkanApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
 	}
 }
 
+void VulkanApplication::recordComputeCommandBuffer(VkCommandBuffer commandBuffer) {
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to begin record command buffer!");
+	}
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &computeDescriptorSets[currentFrame], 0, 0);
+
+	vkCmdDispatch(commandBuffer, MAX_PARTICLES / 256, 1, 1);
+
+	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to record command buffer!");
+	}
+
+	std::cout << "Recording compute command buffer for frame: " << currentFrame << std::endl;
+}
+
 void VulkanApplication::createSyncObjects() {
 	imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	
+	computeInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	computeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1113,6 +1135,10 @@ void VulkanApplication::createSyncObjects() {
 			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
 			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create synchronization objects for a frame!");
+		}
+
+		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &computeFinishedSemaphores[i]) != VK_SUCCESS || vkCreateFence(device, &fenceInfo, nullptr, &computeInFlightFences[i]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create compute synchronization objects for a frame!");
 		}
 	}
 }
@@ -1237,8 +1263,8 @@ void VulkanApplication::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
-	vkQueueSubmit(computeQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(computeQueue);
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(graphicsQueue);
 
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
@@ -2386,16 +2412,16 @@ void VulkanApplication::initParticles() {
 	particles.resize(MAX_PARTICLES);
 
 	for (int i = 0; i < particles.size(); i++) {
-		particles[i].position = glm::vec3(i * 2.0f - 10.f, 0.0f, 0.0f);
-			/*{static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f, 
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f
-		};*/
+		particles[i].position = glm::vec4(
+			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
+			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f,
+			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
+			1.0f);
 		//particles[i].velocity = { (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2, 
 		//						  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
 		//						  (static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2
 		//};
-		particles[i].velocity = glm::vec3(0.0f, 20.0f, 0.0f);
+		particles[i].velocity = glm::vec4(0.0f, -2.0f, 0.0f, 0.0f);
 		particles[i].lifeTime = 0.0f;
 	}
 }
@@ -2409,7 +2435,8 @@ void VulkanApplication::updateParticles(float deltaTime, float time) {
 		if (particles[i].position.y < -15.0f) {
 			particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
 								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f,
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
+								  1.0f
 			};
 		}
 	}
@@ -2842,7 +2869,13 @@ void VulkanApplication::mainLoop() {
 }
 
 void VulkanApplication::drawFrame() {
-	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+	// Compute submission
+	vkWaitForFences(device, 1, &computeInFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+	vkResetFences(device, 1, &computeInFlightFences[currentFrame]);
+
+	vkResetCommandBuffer(computeCommandBuffers[currentFrame], 0);
+	recordComputeCommandBuffer(computeCommandBuffers[currentFrame]);
 
 	uint32_t imageIndex;
 	
@@ -2869,29 +2902,42 @@ void VulkanApplication::drawFrame() {
 	//updateParticles(deltaTime, time);
 	//updateShaderStorageBuffers(currentFrame);
 
-	// Only reset the fence if we are submitting work.
+	VkSubmitInfo submitInfo{};  
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &computeCommandBuffers[currentFrame];
+
+	VkSemaphore signalSemaphores[] = { computeFinishedSemaphores[currentFrame] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	if (vkQueueSubmit(computeQueue, 1, &submitInfo, computeInFlightFences[currentFrame]) != VK_SUCCESS) {
+		throw std::runtime_error("failed to submit compute command buffer!");
+	}
+
+	// Graphics submission
+	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
 	vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 	recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-	VkSubmitInfo submitInfo{};  
+	VkSemaphore waitSemaphores[] = {computeFinishedSemaphores[currentFrame], imageAvailableSemaphores[currentFrame]};
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame]};
-	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.waitSemaphoreCount = 2;
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
-
-	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame]};
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
+	submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
 
-	if (vkQueueSubmit(computeQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
 
@@ -2899,7 +2945,7 @@ void VulkanApplication::drawFrame() {
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
+	presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame];
 
 	VkSwapchainKHR swapChains[] = { swapChain };
 	presentInfo.swapchainCount = 1;

@@ -162,6 +162,7 @@ private:
 	VkDevice device;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;								// Start with no device selected.
 	VkQueue computeQueue;
+	VkQueue graphicsQueue;
 	VkQueue presentQueue;
 	VkSwapchainKHR swapChain;
 
@@ -193,7 +194,7 @@ private:
 	std::vector<VkSemaphore> renderFinishedSemaphores;
 	std::vector<VkFence> inFlightFences;
 
-	const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+	const uint32_t MAX_FRAMES_IN_FLIGHT = 1000;
 
 	uint32_t currentFrame = 0;
 
@@ -279,7 +280,7 @@ private:
 	VkPipelineLayout instancedPipelineLayout;
 
 	// Particles
-	const int MAX_PARTICLES = 10;
+	const int MAX_PARTICLES = 1000;
 	VkDescriptorSetLayout particleDescriptorSetLayout;
 	VkPipelineLayout particlePipelineLayout;
 	VkPipeline particlePipeline;
@@ -296,7 +297,7 @@ private:
 	VkPipelineLayout computePipelineLayout;
 	VkPipeline computePipeline;
 
-	VkCommandBuffer computeCommandBuffer;
+	std::vector<VkCommandBuffer> computeCommandBuffers;
 
 	std::vector<VkBuffer> computeUniformBuffers;
 	std::vector<VkDeviceMemory> computeUniformBuffersMemory;
@@ -409,6 +410,8 @@ public:
 	void createComputeDescriptorSets();
 
 	void createComputePipeline();
+
+	void recordComputeCommandBuffer(VkCommandBuffer);
 
 	void cleanUp();
 };

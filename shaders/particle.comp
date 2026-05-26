@@ -6,8 +6,8 @@ layout (binding = 0) uniform ParameterUBO {
 } ubo;
 
 struct Particle {
-	vec3 position;
-	vec3 velocity;
+	vec4 position;
+	vec4 velocity;
 	float lifeTime;
 };
 
@@ -24,10 +24,8 @@ layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 void main()
 {
 	uint index = gl_GlobalInvocationID.x;
-	if (index >= 10) return;
+	if (index >= 1000) return;
 	Particle particleIn = particlesIn[index];
-
-	
 
 	//particlesOut[index].position.x += sin(ubo.time + float(index)) * 0.05f;
 	//particlesOut[index].position.z += sin(ubo.time + float(index)) * 0.05f;
@@ -35,16 +33,17 @@ void main()
 	vec3 fixedPos = vec3(float(index) * 2.0 - 10.0, 0.0, 0.0);
 	vec3 fixedVelocity = vec3(0.0, 5.0, 0.0);
 
-	particlesOut[index].position = fixedPos + fixedVelocity * 0.1;
-	particlesOut[index].velocity = fixedVelocity;
-	particlesOut[index].lifeTime = 0.0;
+	//float t = ubo.time;
+	particlesOut[index].position = particleIn.position + particleIn.velocity * ubo.deltaTime;
+	particlesOut[index].velocity = particleIn.velocity;
+	particlesOut[index].lifeTime = particleIn.lifeTime;
 
-	//if (particlesOut[index].position.y < 15.0f){
+	if (particlesOut[index].position.y < -15.0f){
 		//float rx = fract(sin(float(index) * 127.1 + ubo.time) * 43758.5) * 150.0 - 50.0;
 		//float ry = fract(sin(float(index) * 311.7 + ubo.time) * 43758.5) * 40.0 + 20.0;
 		//float rz = fract(sin(float(index) * 74.3 + ubo.time) * 43758.5) * 150.0 - 50.0;
 		//particlesOut[index].position = vec3(rx, ry, rz);
 		//particlesOut[index].position = vec3(particleIn.position.x, 20.0, particleIn.position.z);
-		//particlesOut[index].position.y = -15.0;
-	//}
+		particlesOut[index].position.y = 20.0;
+	}
 }
