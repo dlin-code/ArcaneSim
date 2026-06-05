@@ -30,9 +30,6 @@ void main()
 	//particlesOut[index].position.x += sin(ubo.time + float(index)) * 0.05f;
 	//particlesOut[index].position.z += sin(ubo.time + float(index)) * 0.05f;
 
-	vec3 fixedPos = vec3(float(index) * 2.0 - 10.0, 0.0, 0.0);
-	vec3 fixedVelocity = vec3(0.0, 5.0, 0.0);
-
 	//float t = ubo.time;
 	particlesOut[index].position = particleIn.position + particleIn.velocity * ubo.deltaTime;
 	particlesOut[index].velocity = particleIn.velocity;
@@ -44,6 +41,7 @@ void main()
 		//float rz = fract(sin(float(index) * 74.3 + ubo.time) * 43758.5) * 150.0 - 50.0;
 		//particlesOut[index].position = vec3(rx, ry, rz);
 		//particlesOut[index].position = vec3(particleIn.position.x, 20.0, particleIn.position.z);
-		particlesOut[index].position.y = 20.0;
+		particlesOut[index].position.y = 30.0;
+		//particlesOut[index].position.x = float(index) * 0.1;
 	}
 }

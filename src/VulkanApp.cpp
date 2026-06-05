@@ -2414,14 +2414,14 @@ void VulkanApplication::initParticles() {
 	for (int i = 0; i < particles.size(); i++) {
 		particles[i].position = glm::vec4(
 			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
-			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f,
+			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 60.0f + 30.0f,
 			static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
 			1.0f);
 		//particles[i].velocity = { (static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2, 
 		//						  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
 		//						  (static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2
 		//};
-		particles[i].velocity = glm::vec4(0.0f, -2.0f, 0.0f, 0.0f);
+		particles[i].velocity = glm::vec4(0.0f, -(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f), 0.0f, 0.0f);
 		particles[i].lifeTime = 0.0f;
 	}
 }
@@ -2433,9 +2433,9 @@ void VulkanApplication::updateParticles(float deltaTime, float time) {
 		particles[i].position.z += sin(time + i) * 0.05f;
 		
 		if (particles[i].position.y < -15.0f) {
-			particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 40.0f + 20.0f,
-								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 100.0f - 50.0f,
+			particles[i].position = { static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 60.0f + 30.0f,
+								  static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 150.0f - 50.0f,
 								  1.0f
 			};
 		}
@@ -2837,7 +2837,7 @@ void VulkanApplication::initVulkan() {
 	createSkyboxVertexBuffer();
 	createUniformBuffers();
 	createComputeUniformBuffers();
-	initParticles();
+	//initParticles();
 	createShaderStorageBuffers();
 	createDescriptorPool();
 	createDescriptorSets(descriptorSets, snowMountainImageView, snowMountainNormalMapImageView, textureSampler);

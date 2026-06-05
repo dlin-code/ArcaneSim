@@ -280,7 +280,7 @@ private:
 	VkPipelineLayout instancedPipelineLayout;
 
 	// Particles
-	const int MAX_PARTICLES = 1000;
+	const int MAX_PARTICLES = 1024;
 	VkDescriptorSetLayout particleDescriptorSetLayout;
 	VkPipelineLayout particlePipelineLayout;
 	VkPipeline particlePipeline;
