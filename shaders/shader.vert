@@ -20,7 +20,6 @@ layout(location = 5) in vec3 inBitangent;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
-layout(location = 2) out vec3 fragNormal;
 layout(location = 3) out vec3 fragPos;
 layout(location = 4) out mat3 fragTBN;
 
@@ -32,7 +31,6 @@ void main() {
 
 	fragColor = inColor;
 	fragTexCoord = inTexCoord;
-	fragNormal = mat3(pushConstants.model) * inNormal;
 
 	vec3 T = normalize(mat3(pushConstants.model) * inTangent);
 	vec3 N = normalize(mat3(pushConstants.model) * inNormal);
