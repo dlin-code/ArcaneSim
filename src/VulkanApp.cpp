@@ -2421,7 +2421,7 @@ void VulkanApplication::initParticles() {
 		//						  /*-2.0f*/-(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f),
 		//						  (static_cast<float>(rand())/ static_cast<float>(RAND_MAX) * 2.0f - 1.0f) * 2
 		//};
-		particles[i].velocity = glm::vec4(0.0f, -(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 1.0f), 0.0f, 0.0f);
+		particles[i].velocity = glm::vec4(0.0f, -(static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f + 2.0f), 0.0f, 0.0f);
 		particles[i].lifeTime = 0.0f;
 	}
 }
@@ -2968,10 +2968,10 @@ void VulkanApplication::drawFrame() {
 }
 
 void VulkanApplication::updateUniformBuffer(uint32_t currentImage) {
-	static auto startTime = std::chrono::high_resolution_clock::now();
+	//static auto startTime = std::chrono::high_resolution_clock::now();
 
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+	//auto currentTime = std::chrono::high_resolution_clock::now();
+	//float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo{};
 	
