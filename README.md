@@ -1,10 +1,14 @@
 # ArcaneSim
 
-A Vulkan-based 3D rendering engine featuring snow terrain, a medieval tower, and a dead tree inside a skybox.
+A Vulkan-based 3D rendering engine featuring snow terrain, a medieval tower, instanced dead tree, and a GPU particle system inside a skybox.
+
+## Demo
+
+https://youtu.be/51O6j-2cLjQ
 
 ## Overview
 
-ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the Vulkan graphics API. The project showcases a snowy mountain landscape with a medieval stone tower and a dead tree, showcasing techniques like normal mapping, Phong lighting, and skybox rendering.
+ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the Vulkan graphics API. The project showcases a snowy mountain landscape with a medieval stone tower, instanced dead trees, and a GPU-based falling snow particle system, showcasing techniques like normal mapping, Phong lighting, skybox rendering, instanced rendering, and compute shader.
 
 ## Features
 
@@ -15,6 +19,8 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 - **Interactive Camera** - First-person controls with WASDQE movement and mouse look
 - **Push Constants** - Efficient per-object transforms for rendering multiple models
 - **Multi-Model Scene** - Snow mountain terrain, medieval tower, and dead tree with individual textures
+- **Instanced Rendering** - Multiple dead trees rendered in a single draw call, each with unique transform data
+- **GPU Particle Snow System** - Falling snow particles with randomised speed and alpha blending
 
 ## Technical Stack
 
@@ -25,23 +31,9 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 
 ## Screenshots
 
-![Wide View](screenshots/wide_view.png)
-*Snow mountain terrain with medieval tower*
+![Screenshot 1](screenshots/Screenshot_1.png)
 
-![Tower Detail](screenshots/tower_detail.png)
-*Medieval stone tower showing normal mapping detail*
-
-![Mountain Detail](screenshots/mountain_detail.png)
-*Snow-covered terrain with Phong lighting*
-
-![Skybox View](screenshots/skybox_view.png)
-*Skybox environment with atmospheric lighting*
-
-![Top-down View](screenshots/top_down_view.png)
-*Aerial perspective of the scene*
-
-![Dead Tree View](screenshots/dead_tree_view.png)
-*Snow mountain terrain with medieval tower and dead tree*
+![Screenshot 2](screenshots/Screenshot_2.png)
 
 ## Controls
 
@@ -70,4 +62,4 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 
 I'm applying for junior/graduate graphics programming positions and wanted to build something that shows I can work with graphics APIs like Vulkan. This project demonstrates my understanding in rendering pipelines, shader programming, and 3D math.
 
-Built in February 2026
+Built in February 2026, updated June 2026
