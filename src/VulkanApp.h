@@ -16,6 +16,7 @@
 #include "vertex.h"
 #include "camera.h"
 #include "particle.h"
+#include "shadowmapping.h"
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -306,6 +307,8 @@ private:
 	std::vector<VkFence> computeInFlightFences;
 	std::vector<VkSemaphore> computeFinishedSemaphores;
 
+	ShadowMapping shadowMap;
+
 public:
 	std::vector<VkImageView> swapChainImageViews;
 	VkFormat swapChainImageFormat;
@@ -412,6 +415,9 @@ public:
 	void createComputePipeline();
 
 	void recordComputeCommandBuffer(VkCommandBuffer);
+
+	void createShadowMapDepthResource();
+	void createShadowRenderPass();
 
 	void cleanUp();
 };
