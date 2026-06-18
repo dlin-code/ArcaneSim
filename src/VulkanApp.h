@@ -416,8 +416,10 @@ public:
 
 	void recordComputeCommandBuffer(VkCommandBuffer);
 
-	void createShadowMapDepthResource();
+	void createShadowDepthResource();
 	void createShadowRenderPass();
+	void createShadowSampler();
+	void createShadowFramebuffer();
 
 	void cleanUp();
 };

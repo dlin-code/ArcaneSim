@@ -5,4 +5,6 @@ struct ShadowMapping {
 	VkDeviceMemory shadowDepthImageMemory;
 	VkImageView shadowDepthImageView;
 	VkRenderPass shadowRenderPass;
+	VkSampler shadowSampler;
+	VkFramebuffer shadowFramebuffer;
 };

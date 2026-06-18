@@ -2784,7 +2784,7 @@ void VulkanApplication::createComputeDescriptorSets() {
 	}
 }
 
-void VulkanApplication::createShadowMapDepthResource() {
+void VulkanApplication::createShadowDepthResource() {
 	VkFormat shadowDepthFormat = findDepthFormat();
 
 	createImage(swapChainExtent.width, swapChainExtent.height, shadowDepthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowMap.shadowDepthImage, shadowMap.shadowDepthImageMemory);
@@ -2840,6 +2840,49 @@ void VulkanApplication::createShadowRenderPass() {
 
 	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &shadowMap.shadowRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shadow render pass!");
+	}
+}
+
+void VulkanApplication::createShadowSampler() {
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = samplerInfo.addressModeU;
+	samplerInfo.addressModeW = samplerInfo.addressModeU;
+
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+
+	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+	
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
+
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &shadowMap.shadowSampler) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create depth sampler!");
+	}
+}
+
+void VulkanApplication::createShadowFramebuffer() {
+	VkFramebufferCreateInfo framebufferInfo{};
+	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	framebufferInfo.renderPass = shadowMap.shadowRenderPass;
+	framebufferInfo.attachmentCount = 1;
+	framebufferInfo.pAttachments = &shadowMap.shadowDepthImageView;
+	framebufferInfo.width = swapChainExtent.width;
+	framebufferInfo.height = swapChainExtent.height;
+	framebufferInfo.layers = 1;
+
+	if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &shadowMap.shadowFramebuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create shadow frame buffer!");
 	}
 }
 
