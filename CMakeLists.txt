@@ -38,6 +38,8 @@ set(GLSL_SHADERS
   ${SHADER_DIR}/particle.vert
   ${SHADER_DIR}/particle.frag
   ${SHADER_DIR}/particle.comp
+  ${SHADER_DIR}/shadow.vert
+  ${SHADER_DIR}/shadow.frag
 )
 
 set(SPV_SHADERS "")

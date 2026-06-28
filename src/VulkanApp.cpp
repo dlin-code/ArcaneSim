@@ -2787,7 +2787,7 @@ void VulkanApplication::createComputeDescriptorSets() {
 void VulkanApplication::createShadowDepthResource() {
 	VkFormat shadowDepthFormat = findDepthFormat();
 
-	createImage(swapChainExtent.width, swapChainExtent.height, shadowDepthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowMap.shadowDepthImage, shadowMap.shadowDepthImageMemory);
+	createImage(shadowMap.shadowMapWidth, shadowMap.shadowMapHeight, shadowDepthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, shadowMap.shadowDepthImage, shadowMap.shadowDepthImageMemory);
 	shadowMap.shadowDepthImageView = createImageView(shadowMap.shadowDepthImage, VK_IMAGE_VIEW_TYPE_2D, shadowDepthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
@@ -2884,6 +2884,21 @@ void VulkanApplication::createShadowFramebuffer() {
 	if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &shadowMap.shadowFramebuffer) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create shadow frame buffer!");
 	}
+}
+
+void VulkanApplication::createShadowPipeline() {
+	auto vertShaderCode = readFile("shaders/shadow_vert.spv");
+	auto fragShaderCode = readFile("shaders/shadow_frag.spv");
+
+	if (vertShaderCode.size() == 0) {
+		std::cerr << "Shadow vertex shader file is empty!" << std::endl;
+	}
+
+	if (fragShaderCode.size() == 0) {
+		std::cerr << "Shadow fragment shader file is empty!" << std::endl;
+	}
+
+
 }
 
 void VulkanApplication::initVulkan() {

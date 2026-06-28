@@ -420,6 +420,7 @@ public:
 	void createShadowRenderPass();
 	void createShadowSampler();
 	void createShadowFramebuffer();
+	void createShadowPipeline();
 
 	void cleanUp();
 };
