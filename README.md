@@ -60,6 +60,6 @@ ArcaneSim is a portfolio project I built to demonstrate 3D rendering using the V
 
 ## Why I made this
 
-I'm applying for junior/graduate graphics programming positions and wanted to build something that shows I can work with graphics APIs like Vulkan. This project demonstrates my understanding in rendering pipelines, shader programming, and 3D math.
+I created this project to deepen my understanding of the software pipeline and graphics rendering.
 
-Built in February 2026, updated June 2026
+Built in February 2026, updated August 2026
